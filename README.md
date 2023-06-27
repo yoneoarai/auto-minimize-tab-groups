@@ -8,3 +8,4 @@ Groups containing the active tab will always remain open unless closed manually.
 Run `npm ci` to install npm packages.
 
 To build, run `npm run build`
+

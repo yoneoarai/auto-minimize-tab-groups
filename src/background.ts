@@ -36,7 +36,7 @@ chrome.tabs.onCreated.addListener(function (tab) {
 
 // Event listener for new tab creation via link
 chrome.tabs.onCreated.addListener(function (tab) {
-  if (newlyOpenedGroupIds.length === 0) {
+  if (newlyOpenedGroupIds.length === 0 && tab.openerTabId !== undefined) {
     chrome.tabs.get(tab.openerTabId, function (openerTab) {
       const openerGroupId = openerTab.groupId
       if (
