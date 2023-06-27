@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Minimize Tab Groups",
+  "description": "Extension to minimize tab groupings after 5 seconds of inactivity. Groups containing the active tab will always remain open unless closed manually.",
+  "version": "0.0.1",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs", "tabGroups"]
+}

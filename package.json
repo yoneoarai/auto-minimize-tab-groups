@@ -1,0 +1,20 @@
+{
+  "name": "auto-minimize-tab-groups",
+  "version": "0.0.1",
+  "description": "Extension to minimize tab groupings after 5 seconds of inactivity. Groups containing the active tab will always remain open unless closed manually.",
+  "main": "background.ts",
+  "scripts": {
+    "build": "src/tsc --outDir . background.ts", 
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "chrome",
+    "extension",
+    "chrom-extension"
+  ],
+  "author": "Yoneo Arai",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chrome": "^0.0.239"
+  }
+}
