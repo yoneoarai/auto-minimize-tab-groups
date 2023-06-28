@@ -4,8 +4,8 @@
   "description": "Minimize tab groups after 5s of inactivity. Active tab groups stay open.",
   "main": "background.ts",
   "scripts": {
-    "package": " zip -r -D \"upload.zip\" ./ -x \"node_modules/*\" -x \".git/*\" -x \".gitignore\"", 
-    "build": "tsc --outDir . src/background.ts", 
+    "package": " zip -r -D \"upload.zip\" ./ -x \"node_modules/*\" -x \".git/*\" -x \".gitignore\"",
+    "build": "tsc --outDir . src/background.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -16,6 +16,7 @@
   "author": "Yoneo Arai",
   "license": "ISC",
   "devDependencies": {
-    "@types/chrome": "^0.0.239"
+    "@types/chrome": "^0.0.239",
+    "@types/node": "^20.3.2"
   }
 }
