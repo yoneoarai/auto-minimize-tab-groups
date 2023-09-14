@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Auto Minimize Tab Groups",
   "author": "yoneoarai@gmail.com",
-  "description": "Minimize tab groups after 5s of inactivity. Active tab groups stay open.",
+  "description": "Minimize tab groups after 15s of inactivity. Active tab groups stay open.",
   "version": "0.0.1",
   "background": {
     "service_worker": "background.js"
