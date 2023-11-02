@@ -97,3 +97,19 @@ chrome.tabGroups.onUpdated.addListener(function (activeInfo) {
     }
     setTabGroupInterval();
 });
+// Event listener to minimize groups on Chrome startup
+chrome.runtime.onStartup.addListener(function () {
+    chrome.tabs.query({}, function (tabs) {
+        for (var _i = 0, tabs_1 = tabs; _i < tabs_1.length; _i++) {
+            var tab = tabs_1[_i];
+            var windowId = tab.windowId;
+            chrome.tabGroups.query({ windowId: windowId }, function (groups) {
+                for (var _i = 0, groups_2 = groups; _i < groups_2.length; _i++) {
+                    var group = groups_2[_i];
+                    var groupId = group.id;
+                    minimizeTabGroup(groupId);
+                }
+            });
+        }
+    });
+});
