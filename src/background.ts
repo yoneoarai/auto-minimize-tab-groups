@@ -37,7 +37,7 @@ function setTabGroupInterval() {
 
     // Clear newly opened group IDs
     newlyOpenedGroupIds = [];
-  }, 30000);
+  }, 15000);
 }
 
 // Store active tab group ID and newly opened group IDs without an active tab
