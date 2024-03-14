@@ -1,11 +1,12 @@
 {
   "name": "auto-minimize-tab-groups",
   "version": "0.0.1",
-  "description": "Minimize tab groups after 5s of inactivity. Active tab groups stay open.",
+  "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
   "main": "background.ts",
   "scripts": {
-    "package": " zip -r -D \"upload.zip\" ./ -x \"node_modules/*\" -x \".git/*\" -x \".gitignore\"",
-    "build": "tsc --outDir . src/background.ts",
+    "package": "zip -r -D \"upload.zip\" ./dist",
+    "build-local": "tsc --outDir . src/background.ts",
+    "build": "webpack --mode production",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -17,6 +18,9 @@
   "license": "ISC",
   "devDependencies": {
     "@types/chrome": "^0.0.239",
-    "@types/node": "^20.3.2"
+    "@types/node": "^20.3.2",
+    "ts-loader": "^9.5.1",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
   }
 }
