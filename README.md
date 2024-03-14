@@ -2,6 +2,7 @@
 # Auto Minimize Tab Groups
 
 Extension to minimize tab groupings after 30 seconds of inactivity. 
+Extension Options page to set custom close times.
 Groups containing the active tab will always remain open unless closed manually.
 
 

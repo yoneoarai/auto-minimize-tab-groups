@@ -1,10 +1,14 @@
 // webpack.config.js
 const path = require("path");
+const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
-  entry: "./src/background.ts",
+  entry: {
+    background: "./src/background.ts",
+    options: "./src/options.ts",
+  },
   output: {
-    filename: "background.js",
+    filename: "[name].js",
     path: path.resolve(__dirname, "dist"),
   },
   resolve: {
@@ -19,5 +23,10 @@ module.exports = {
       },
     ],
   },
+  plugins: [
+    new CopyPlugin({
+      patterns: [{ from: "src/options.html", to: "" }],
+    }),
+  ],
   target: "web",
 };
