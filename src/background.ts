@@ -37,7 +37,7 @@ function setTabGroupInterval() {
 
     // Clear newly opened group IDs
     newlyOpenedGroupIds = [];
-  }, 15000);
+  }, 30000);
 }
 
 // Store active tab group ID and newly opened group IDs without an active tab
@@ -100,26 +100,27 @@ chrome.tabs.onCreated.addListener(function (tab) {
 
 // Event listener for tab group activation
 chrome.tabGroups.onUpdated.addListener(function (activeInfo) {
-  clearIntervalFunction()
-  const groupId = activeInfo.id
+  clearIntervalFunction();
+  const groupId = activeInfo.id;
   if (groupId !== -1) {
     newlyOpenedGroupIds.push(groupId);
   }
-  setTabGroupInterval()
-})
-
+  setTabGroupInterval();
+});
 
 // Event listener to minimize groups on Chrome startup
 chrome.runtime.onStartup.addListener(function () {
-  chrome.tabs.query({}, function (tabs) {
-    for (const tab of tabs) {
-      const windowId = tab.windowId;
-      chrome.tabGroups.query({ windowId: windowId }, function (groups) {
-        for (const group of groups) {
-          const groupId = group.id;
-          minimizeTabGroup(groupId);
+  setTimeout(function () {
+    chrome.tabs.query({}, function (tabs) {
+      for (const tab of tabs) {
+        const windowId = tab.windowId;
+        chrome.tabGroups.query({ windowId: windowId }, function (groups) {
+          for (const group of groups) {
+            const groupId = group.id;
+            minimizeTabGroup(groupId);
           }
         });
-    }
-  });
+      }
+    });
+  }, 5000); // Wait for 5 seconds before minimizing tabs
 });
