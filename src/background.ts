@@ -107,3 +107,19 @@ chrome.tabGroups.onUpdated.addListener(function (activeInfo) {
   }
   setTabGroupInterval()
 })
+
+
+// Event listener to minimize groups on Chrome startup
+chrome.runtime.onStartup.addListener(function () {
+  chrome.tabs.query({}, function (tabs) {
+    for (const tab of tabs) {
+      const windowId = tab.windowId;
+      chrome.tabGroups.query({ windowId: windowId }, function (groups) {
+        for (const group of groups) {
+          const groupId = group.id;
+          minimizeTabGroup(groupId);
+          }
+        });
+    }
+  });
+});
