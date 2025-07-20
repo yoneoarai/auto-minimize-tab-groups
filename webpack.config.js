@@ -5,7 +5,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 module.exports = {
   entry: {
     background: "./src/background.ts",
-    options: "./src/options.ts",
+    popup: "./src/popup.ts",
   },
   output: {
     filename: "[name].js",
@@ -25,7 +25,7 @@ module.exports = {
   },
   plugins: [
     new CopyPlugin({
-      patterns: [{ from: "src/options.html", to: "" }],
+      patterns: [{ from: "src/popup.html", to: "" }],
     }),
   ],
   target: "web",

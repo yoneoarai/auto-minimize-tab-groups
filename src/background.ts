@@ -1,3 +1,5 @@
+/// <reference types="chrome"/>
+
 /**
  * Global timeout value in milliseconds.
  */
@@ -8,10 +10,20 @@ let globalTimeout: number = 30000;
  * @param changes - The changes object containing the updated values.
  */
 chrome.storage.onChanged.addListener(function (changes) {
-  for (let key in changes) {
-    if (key === "timeout") {
-      globalTimeout = validateTimeout(changes[key].newValue);
+  try {
+    for (let key in changes) {
+      if (key === "timeout") {
+        const newValue = changes[key].newValue;
+        globalTimeout = validateTimeout(newValue);
+        console.log(`Timeout updated to: ${globalTimeout}ms`);
+        
+        // Restart interval with new timeout
+        clearIntervalFunction();
+        setTabGroupInterval();
+      }
     }
+  } catch (error) {
+    console.error('Error handling storage change:', error);
   }
 });
 
@@ -58,35 +70,59 @@ function clearIntervalFunction() {
 
 /**
  * Helper function to set the interval function.
+ * Now properly handles multiple windows and includes better error handling.
  */
 function setTabGroupInterval() {
   intervalId = setInterval(function () {
-    chrome.tabs.query({}, function (tabs) {
-      if (tabs[0]) {
-        const windowId = tabs[0].windowId; // Assuming all tabs belong to the same window
-        chrome.tabGroups.query({ windowId: windowId }, function (groups) {
-          for (const group of groups) {
-            const groupId = group.id;
-            if (
-              groupId !== activeGroupId &&
-              !newlyOpenedGroupIds.includes(groupId)
-            ) {
-              chrome.tabs.query({ groupId: groupId }, function (groupTabs) {
-                const activeTabIds = groupTabs
-                  .filter((tab) => tab.active)
-                  .map((tab) => tab.id);
-                if (activeTabIds.length === 0) {
-                  minimizeTabGroup(groupId);
-                }
-              });
-            }
-          }
-        });
-      }
-    });
+    try {
+      // Get all windows to handle multi-window scenarios properly
+      chrome.windows.getAll({ populate: true }, function (windows) {
+        if (chrome.runtime.lastError) {
+          console.warn('Failed to get windows:', chrome.runtime.lastError.message);
+          return;
+        }
 
-    // Clear newly opened group IDs
-    newlyOpenedGroupIds = [];
+        // Process each window separately
+        windows.forEach(window => {
+          if (!window.id) return;
+          
+          chrome.tabGroups.query({ windowId: window.id }, function (groups) {
+            if (chrome.runtime.lastError) {
+              console.warn('Failed to get tab groups for window:', chrome.runtime.lastError.message);
+              return;
+            }
+
+            groups.forEach(group => {
+              const groupId = group.id;
+              if (
+                groupId !== activeGroupId &&
+                !newlyOpenedGroupIds.has(groupId) &&
+                !group.collapsed // Don't process already collapsed groups
+              ) {
+                chrome.tabs.query({ groupId: groupId }, function (groupTabs) {
+                  if (chrome.runtime.lastError) {
+                    console.warn('Failed to get tabs for group:', chrome.runtime.lastError.message);
+                    return;
+                  }
+
+                  // Check if any tab in the group is active
+                  const hasActiveTabs = groupTabs.some(tab => tab.active);
+                  if (!hasActiveTabs && groupTabs.length > 0) {
+                    minimizeTabGroup(groupId);
+                  }
+                });
+              }
+            });
+          });
+        });
+
+        // Clear newly opened group IDs and run cleanup
+        newlyOpenedGroupIds.clear();
+        cleanupState();
+      });
+    } catch (error) {
+      console.error('Error in tab group interval:', error);
+    }
   }, globalTimeout);
 }
 
@@ -94,8 +130,29 @@ function setTabGroupInterval() {
  * Stores the active tab group ID and newly opened group IDs without an active tab.
  */
 let activeGroupId: number | null = null;
-let newlyOpenedGroupIds: number[] = [];
+let newlyOpenedGroupIds: Set<number> = new Set();
 let intervalId: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Clean up state for removed tabs/groups
+ */
+function cleanupState() {
+  // Clear newly opened groups that no longer exist or have been processed
+  const groupsToRemove = new Set<number>();
+  
+  newlyOpenedGroupIds.forEach(groupId => {
+    chrome.tabGroups.get(groupId, (group) => {
+      if (chrome.runtime.lastError || !group) {
+        groupsToRemove.add(groupId);
+      }
+    });
+  });
+  
+  // Remove non-existent groups after a small delay
+  setTimeout(() => {
+    groupsToRemove.forEach(groupId => newlyOpenedGroupIds.delete(groupId));
+  }, 100);
+}
 
 // Starts the interval if its not already running
 if (intervalId === null) {
@@ -125,40 +182,43 @@ chrome.tabs.onActivated.addListener(function (activeInfo) {
 
 /**
  * Event listener for tab creation.
+ * Handles both direct tab creation and tab creation via links.
  * Clears the interval function, updates the newlyOpenedGroupIds, and sets the tab group interval.
  * @param tab - The newly created tab.
  */
 chrome.tabs.onCreated.addListener(function (tab) {
   clearIntervalFunction();
+  
   const groupId = tab.groupId;
+  
+  // Handle direct tab creation in a group
   if (
     groupId !== -1 &&
-    activeGroupId === null &&
-    !newlyOpenedGroupIds.includes(groupId)
+    activeGroupId !== groupId &&
+    !newlyOpenedGroupIds.has(groupId)
   ) {
-    newlyOpenedGroupIds.push(groupId);
+    newlyOpenedGroupIds.add(groupId);
   }
-  setTabGroupInterval();
-});
-
-/**
- * Event listener for new tab creation via link.
- * Clears the interval function, updates the newlyOpenedGroupIds, and sets the tab group interval.
- * @param tab - The newly created tab.
- */
-chrome.tabs.onCreated.addListener(function (tab) {
-  clearIntervalFunction();
-  if (newlyOpenedGroupIds.length === 0 && tab.openerTabId !== undefined) {
+  
+  // Handle tab creation via link (opener tab)
+  if (tab.openerTabId !== undefined) {
     chrome.tabs.get(tab.openerTabId, function (openerTab) {
+      if (chrome.runtime.lastError) {
+        console.warn('Failed to get opener tab:', chrome.runtime.lastError.message);
+        return;
+      }
+      
       const openerGroupId = openerTab.groupId;
       if (
         openerGroupId !== -1 &&
-        !newlyOpenedGroupIds.includes(openerGroupId)
+        openerGroupId !== activeGroupId &&
+        !newlyOpenedGroupIds.has(openerGroupId)
       ) {
-        newlyOpenedGroupIds.push(openerGroupId);
+        newlyOpenedGroupIds.add(openerGroupId);
       }
     });
   }
+  
   setTabGroupInterval();
 });
 
@@ -171,7 +231,7 @@ chrome.tabGroups.onUpdated.addListener(function (activeInfo) {
   clearIntervalFunction();
   const groupId = activeInfo.id;
   if (groupId !== -1) {
-    newlyOpenedGroupIds.push(groupId);
+    newlyOpenedGroupIds.add(groupId);
   }
   setTabGroupInterval();
 });
