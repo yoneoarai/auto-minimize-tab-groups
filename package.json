@@ -4,7 +4,7 @@
   "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
   "main": "background.ts",
   "scripts": {
-    "package": "rm -f upload.zip && zip -r -D \"upload.zip\" ./dist ./manifest.json",
+    "package": "rm -f upload.zip && zip -r -D \"upload.zip\" ./dist ./manifest.json ./icon.png",
     "build-local": "tsc --outDir . src/background.ts",
     "build": "webpack --mode production",
     "test": "echo \"Error: no test specified\" && exit 1"
