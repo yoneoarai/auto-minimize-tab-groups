@@ -11,6 +11,9 @@
     "tabGroups",
     "storage"
   ],
+  "icons": {
+    "128": "icon.png"
+  },
   "action": {
     "default_popup": "dist/popup.html",
     "default_title": "Auto Minimize Tab Groups Settings"
