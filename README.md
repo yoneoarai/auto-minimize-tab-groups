@@ -9,18 +9,17 @@
 
 A cross-browser extension that automatically minimizes (collapses) tab groups after a configurable period of inactivity to help keep your browser organized and reduce visual clutter.
 
-**🎉 Now supports both Chrome and Firefox!**
+**Now supports both Chrome and Firefox!**
 
-## ✨ Features
+## Features
 
-- 🔄 **Smart Auto-Minimization**: Automatically collapses inactive tab groups after a customizable timeout
-- 🎯 **Active Tab Protection**: Groups containing active tabs are never minimized
-- 🖥️ **Multi-Window Support**: Works seamlessly across multiple browser windows
-- ⚙️ **Configurable Timeout**: Set custom delay from 1 second to 1 hour via popup interface
-- 🌐 **Cross-Browser Compatible**: Works on both Chrome and Firefox with identical functionality
-- ✨ **Modern Architecture**: Built with TypeScript and cross-browser API abstractions
+- **Smart Auto-Minimization**: Automatically collapses inactive tab groups after a customizable timeout
+- **Active Tab Protection**: Groups containing active tabs are never minimized
+- **Multi-Window Support**: Works seamlessly across multiple browser windows
+- **Configurable Timeout**: Set custom delay from 1 second to 1 hour via popup interface
+- **Cross-Browser Compatible**: Works on both Chrome and Firefox with identical functionality
 
-## 🚀 Installation
+## Installation
 
 ### For End Users
 
@@ -80,32 +79,13 @@ A cross-browser extension that automatically minimizes (collapses) tab groups af
    npm run package:firefox
    ```
 
-## ⚙️ Configuration
+## Configuration
 
 Access the extension settings instantly through:
 - **Click the extension icon** in your Chrome toolbar
 - Modern popup interface opens immediately - no separate tabs needed!
 
-### Settings
-
-- **Timeout Duration**: Set how long to wait (1-3600 seconds) before minimizing inactive tab groups
-- **Status Display**: See current timeout and active tab group count
-- **Quick Actions**: Save settings or reset to default with one click
-- **Instant Apply**: Changes take effect immediately without browser restart
-
-
-## 🏗️ Architecture
-
-- **Background Service Worker**: Handles tab group monitoring and minimization logic
-- **Popup Interface**: Modern, compact settings UI accessible via extension icon
-- **Chrome APIs Used**:
-  - `tabGroups`: For querying and updating tab group states
-  - `tabs`: For monitoring tab activity and creation
-  - `storage`: For persisting user preferences
-  - `windows`: For multi-window support
-  - `action`: For popup interface integration
-
-## 🛠️ Development
+## Development
 
 ### Prerequisites
 
@@ -147,46 +127,6 @@ webpack.config.js   # Build configuration
 tsconfig.json       # TypeScript configuration
 ```
 
-## 📋 Recent Improvements (v0.1.0)
-
-### 🐛 Critical Fixes
-- **Fixed duplicate event listeners** that caused performance issues
-- **Eliminated memory leaks** with proper state cleanup
-- **Added comprehensive error handling** for all Chrome API calls
-
-### 🚀 Performance Enhancements  
-- **Multi-window support** - properly handles multiple Chrome windows
-- **Optimized querying** - more efficient tab and group detection
-- **Set-based state management** - improved performance for group tracking
-- **Smart cleanup functions** - automatic removal of stale group references
-
-### 🎨 User Experience Revolution
-- **✨ NEW: Popup Interface** - Replaced separate options page with instant popup access
-- **Modern UI Design** - Clean, Google-style interface with intuitive controls
-- **Real-time Status** - See current timeout and active tab group count instantly
-- **Input validation** - Real-time validation with helpful error messages
-- **Quick Actions** - Save settings or reset to default with one click
-- **Accessibility improvements** - Proper ARIA labels and keyboard support
-- **Enhanced styling** - Modern, responsive design with visual feedback
-- **Better error messaging** - Clear feedback for configuration issues
-
-## 🔍 Troubleshooting
-
-### Extension Not Working
-1. Check that the extension is enabled in `chrome://extensions/`
-2. Verify you have tab groups created (extension only works with grouped tabs)
-3. Check the browser console for error messages
-
-### Tab Groups Not Minimizing
-1. Ensure the timeout period has elapsed
-2. Verify the group doesn't contain active tabs
-3. Check extension options for correct timeout value
-4. Look for error messages in the extension console
-
-### Options Page Issues
-1. Try refreshing the options page
-2. Check that timeout values are within valid range (1-3600 seconds)
-3. Clear extension data and reconfigure if needed
 
 ## ☕ Support This Project
 
@@ -196,7 +136,7 @@ If you find this extension helpful and want to support its development:
 
 Your support helps keep this project maintained and enables new features! 🙏
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
