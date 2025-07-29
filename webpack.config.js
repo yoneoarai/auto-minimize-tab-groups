@@ -31,27 +31,34 @@ module.exports = (env, argv) => {
     plugins: [
       new CopyPlugin({
         patterns: [
-          { 
-            from: "src/common/popup.html", 
-            to: "popup.html" 
+          {
+            from: "src/common/popup.html",
+            to: "popup.html",
           },
-          { 
-            from: `manifest-${browser}.json`, 
-            to: "manifest.json" 
+          {
+            from: `manifest-${browser}.json`,
+            to: "manifest.json",
           },
-          { 
-            from: "icon.png", 
-            to: "icon.png" 
-          }
+          {
+            from: "icon.png",
+            to: "icon.png",
+          },
         ],
       }),
     ],
     target: "web",
     // Avoid eval() for browser extension security requirements
-    devtool: isProduction ? false : 'source-map',
+    // Use 'source-map' for debugging without eval, false for production
+    devtool: isProduction ? false : "source-map",
     optimization: {
       minimize: isProduction,
+      // Ensure no eval-based optimizations for CSP compliance
+      concatenateModules: false,
     },
-    mode: isProduction ? 'production' : 'development',
+    mode: isProduction ? "production" : "development",
+    // Additional CSP-safe configuration for browser extensions
+    performance: {
+      hints: false, // Disable performance hints for extensions
+    },
   };
 };
