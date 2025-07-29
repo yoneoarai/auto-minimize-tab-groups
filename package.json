@@ -4,15 +4,27 @@
   "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
   "main": "background.ts",
   "scripts": {
-    "package": "rm -f upload.zip && zip -r -D \"upload.zip\" ./dist ./manifest.json ./icon.png",
+    "build": "npm run build:chrome && npm run build:firefox",
+    "build:chrome": "webpack --mode production --env browser=chrome",
+    "build:firefox": "webpack --mode production --env browser=firefox",
+    "build:dev": "npm run build:dev:chrome && npm run build:dev:firefox",
+    "build:dev:chrome": "webpack --mode development --env browser=chrome",
+    "build:dev:firefox": "webpack --mode development --env browser=firefox",
+    "watch:chrome": "webpack --mode development --env browser=chrome --watch",
+    "watch:firefox": "webpack --mode development --env browser=firefox --watch",
+    "package": "npm run build && npm run package:chrome && npm run package:firefox",
+    "package:chrome": "cd dist/chrome && zip -r -D ../../chrome-extension.zip .",
+    "package:firefox": "cd dist/firefox && zip -r -D ../../firefox-extension.zip .",
+    "clean": "rm -rf dist && rm -f *.zip",
     "build-local": "tsc --outDir . src/background.ts",
-    "build": "webpack --mode production",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "chrome",
+    "firefox",
     "extension",
-    "chrome-extension"
+    "browser-extension",
+    "cross-browser"
   ],
   "author": "Yoneo Arai",
   "license": "ISC",

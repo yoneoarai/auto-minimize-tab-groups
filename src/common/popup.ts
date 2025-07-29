@@ -1,4 +1,4 @@
-/// <reference types="chrome"/>
+import { BrowserAPI } from './browser-api';
 
 interface ValidationResult {
   isValid: boolean;
@@ -65,36 +65,14 @@ function showMessage(message: string, isError: boolean) {
  * Updates the status section with current information
  */
 function updateStatus() {
-  chrome.storage.sync.get(['timeout'], (data) => {
+  BrowserAPI.storageGet(['timeout']).then((data) => {
     const timeout = (data.timeout || 30000) / 1000;
     const currentTimeoutEl = document.getElementById('current-timeout');
     if (currentTimeoutEl) {
       currentTimeoutEl.textContent = `${timeout}s`;
     }
-  });
-
-  // Get count of active tab groups
-  chrome.tabs.query({ currentWindow: true }, (tabs) => {
-    if (chrome.runtime.lastError) {
-      console.error('Failed to query tabs:', chrome.runtime.lastError.message);
-      return;
-    }
-
-    const windowId = tabs[0]?.windowId;
-    if (windowId) {
-      chrome.tabGroups.query({ windowId }, (groups) => {
-        if (chrome.runtime.lastError) {
-          console.error('Failed to query tab groups:', chrome.runtime.lastError.message);
-          return;
-        }
-
-        const activeGroupsEl = document.getElementById('active-groups');
-        if (activeGroupsEl) {
-          const visibleGroups = groups.filter(group => !group.collapsed);
-          activeGroupsEl.textContent = `${visibleGroups.length}`;
-        }
-      });
-    }
+  }).catch((error) => {
+    console.error('Failed to load timeout from storage:', error);
   });
 }
 
@@ -120,15 +98,12 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Load current timeout value
-  chrome.storage.sync.get(['timeout'], function (data) {
-    if (chrome.runtime.lastError) {
-      console.error('Failed to load timeout from storage:', chrome.runtime.lastError.message);
-      showMessage('Failed to load current settings.', true);
-      return;
-    }
-    
+  BrowserAPI.storageGet(['timeout']).then((data) => {
     const timeout = (data.timeout || 30000) / 1000; // Convert to seconds
     timeoutInput.value = timeout.toString();
+  }).catch((error) => {
+    console.error('Failed to load timeout from storage:', error);
+    showMessage('Failed to load current settings.', true);
   });
 
   // Update status information
@@ -158,20 +133,17 @@ document.addEventListener('DOMContentLoaded', function () {
     setButtonLoading(saveBtn, true);
     
     // Save to storage
-    chrome.storage.sync.set({ timeout: timeoutValue }, function () {
+    BrowserAPI.storageSet({ timeout: timeoutValue }).then(() => {
       setButtonLoading(saveBtn, false);
-      
-      if (chrome.runtime.lastError) {
-        console.error('Failed to save timeout to storage:', chrome.runtime.lastError.message);
-        showMessage('Failed to save settings. Please try again.', true);
-        return;
-      }
-      
       console.log(`Timeout value saved: ${timeoutValue}ms`);
       showMessage(`Settings saved! Groups will minimize after ${timeoutInput.value} seconds.`, false);
       
       // Update status display
       updateStatus();
+    }).catch((error) => {
+      setButtonLoading(saveBtn, false);
+      console.error('Failed to save timeout to storage:', error);
+      showMessage('Failed to save settings. Please try again.', true);
     });
   });
 
@@ -179,15 +151,12 @@ document.addEventListener('DOMContentLoaded', function () {
   resetBtn.addEventListener('click', function() {
     timeoutInput.value = '30'; // Default 30 seconds
     
-    chrome.storage.sync.set({ timeout: 30000 }, function () {
-      if (chrome.runtime.lastError) {
-        console.error('Failed to reset timeout:', chrome.runtime.lastError.message);
-        showMessage('Failed to reset settings.', true);
-        return;
-      }
-      
+    BrowserAPI.storageSet({ timeout: 30000 }).then(() => {
       showMessage('Settings reset to default (30 seconds).', false);
       updateStatus();
+    }).catch((error) => {
+      console.error('Failed to reset timeout:', error);
+      showMessage('Failed to reset settings.', true);
     });
   });
 

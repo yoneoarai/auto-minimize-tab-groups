@@ -1,20 +1,34 @@
 # Auto Minimize Tab Groups
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green)
+![Firefox Extension](https://img.shields.io/badge/Firefox-Extension-orange)
+![Cross Browser](https://img.shields.io/badge/Cross--Browser-Compatible-blue)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-4.x-blue)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-☕-yellow.svg)](https://coff.ee/yoneo)
 
-A Chrome extension that automatically minimizes (collapses) tab groups after a configurable period of inactivity to help keep your browser organized and reduce visual clutter.
+A cross-browser extension that automatically minimizes (collapses) tab groups after a configurable period of inactivity to help keep your browser organized and reduce visual clutter.
+
+**🎉 Now supports both Chrome and Firefox!**
 
 ## ✨ Features
 
 - 🔄 **Smart Auto-Minimization**: Automatically collapses inactive tab groups after a customizable timeout
 - 🎯 **Active Tab Protection**: Groups containing active tabs are never minimized
-- 🖥️ **Multi-Window Support**: Works seamlessly across multiple Chrome windows
-- ⚙️ **Configurable Timeout**: Set custom delay from 1 second to 1 hour via options page
+- 🖥️ **Multi-Window Support**: Works seamlessly across multiple browser windows
+- ⚙️ **Configurable Timeout**: Set custom delay from 1 second to 1 hour via popup interface
+- 🌐 **Cross-Browser Compatible**: Works on both Chrome and Firefox with identical functionality
+- ✨ **Modern Architecture**: Built with TypeScript and cross-browser API abstractions
 
 ## 🚀 Installation
+
+### For End Users
+
+**Chrome:**
+- Install from [Chrome Web Store](https://chromewebstore.google.com/detail/auto-minimize-tab-groups/imjkoaaioakpbcgllmffjdolddjaohdi)
+
+**Firefox:**
+- Install from Firefox Add-ons (coming soon!)
 
 ### From Source (Development)
 
@@ -31,23 +45,40 @@ A Chrome extension that automatically minimizes (collapses) tab groups after a c
 
 3. **Build the extension**
    ```bash
-   # For production build
+   # Build for both browsers (recommended)
    npm run build
    
-   # For local development (TypeScript compilation only)
-   npm run build-local
+   # Build for specific browser
+   npm run build:chrome    # Chrome only
+   npm run build:firefox   # Firefox only
+   
+   # Development builds with source maps
+   npm run build:dev       # Both browsers
+   npm run build:dev:chrome
+   npm run build:dev:firefox
    ```
 
-4. **Load in Chrome**
+4. **Load in browser**
+
+   **Chrome:**
    - Open `chrome://extensions/`
    - Enable "Developer mode"
-   - Click "Load unpacked" and select the project directory
+   - Click "Load unpacked" and select `dist/chrome/`
+
+   **Firefox:**
+   - Open `about:debugging`
+   - Click "This Firefox"
+   - Click "Load Temporary Add-on"
+   - Select `dist/firefox/manifest.json`
 
 5. **Package for distribution**
    ```bash
-   npm run package
+   npm run package  # Creates both chrome-extension.zip and firefox-extension.zip
+   
+   # Or package individually
+   npm run package:chrome
+   npm run package:firefox
    ```
-   This creates `upload.zip` ready for Chrome Web Store submission.
 
 ## ⚙️ Configuration
 
