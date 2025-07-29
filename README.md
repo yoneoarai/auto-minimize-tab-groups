@@ -28,7 +28,7 @@ A cross-browser extension that automatically minimizes (collapses) tab groups af
 - Install from [Chrome Web Store](https://chromewebstore.google.com/detail/auto-minimize-tab-groups/imjkoaaioakpbcgllmffjdolddjaohdi)
 
 **Firefox:**
-- Install from Firefox Add-ons (coming soon!)
+- Install from [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/auto-minimize-tab-groups/)
 
 ### From Source (Development)
 
