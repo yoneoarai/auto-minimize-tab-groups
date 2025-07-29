@@ -1,6 +1,6 @@
 {
   "name": "auto-minimize-tab-groups",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
   "main": "background.ts",
   "scripts": {

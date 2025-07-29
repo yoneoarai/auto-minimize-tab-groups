@@ -1,11 +1,11 @@
 {
-  "manifest_version": 4,
+  "manifest_version": 3,
   "name": "Auto Minimize Tab Groups",
   "author": "yoneoarai@gmail.com",
   "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "background": {
-    "service_worker": "dist/chrome/background.js"
+    "service_worker": "background.js"
   },
   "permissions": [
     "tabGroups",
@@ -15,7 +15,7 @@
     "128": "icon.png"
   },
   "action": {
-    "default_popup": "dist/chrome/popup.html",
+    "default_popup": "popup.html",
     "default_title": "Auto Minimize Tab Groups Settings"
   },
   "homepage_url": "https://github.com/yoneoarai/auto-minimize-tab-groups"
