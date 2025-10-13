@@ -1,9 +1,19 @@
 import { BrowserAPI } from './browser-api';
 
-/**
- * Global timeout value in milliseconds.
- */
-let globalTimeout: number = 30000;
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
+const DEBOUNCE_DELAY_MS = 250; // Event debouncing delay
+const NEW_TAB_GRACE_PERIOD_MS = 1000; // Grace period for new tabs to settle
+const JUST_OPENED_GRACE_PERIOD_MS = 5000; // Grace period for manually opened groups
+const STARTUP_DELAY_MS = 2000; // Delay before initializing on startup
+const INSTALL_DELAY_MS = 1000; // Delay before initializing on install/update
+
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
 
 /**
  * Per-group timer management
@@ -13,39 +23,95 @@ interface GroupState {
   lastActivity: number;
   isActive: boolean;
   windowId: number;
+  justOpened?: number; // Timestamp when group was manually opened
 }
 
+let globalTimeout: number = DEFAULT_TIMEOUT_MS;
 const groupTimers = new Map<number, GroupState>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let activeGroupId: number | null = null;
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
 /**
  * Validates the timeout value and returns a number.
- * If the timeout value is not a valid number or less than or equal to 0, the default timeout value of 30000 is returned.
+ * If the timeout value is not a valid number or less than or equal to 0, returns the default timeout.
  */
 function validateTimeout(timeout: any): number {
   const parsedTimeout = parseInt(timeout);
   if (isNaN(parsedTimeout) || parsedTimeout <= 0) {
-    return 30000;
+    return DEFAULT_TIMEOUT_MS;
   }
   return parsedTimeout;
 }
 
 /**
- * Helper function to minimize a tab group by its groupId with error handling.
+ * Minimizes a tab group and cleans up its timer.
  */
 async function minimizeTabGroup(groupId: number): Promise<void> {
   try {
     await BrowserAPI.tabGroups.update(groupId, { collapsed: true });
-    
-    // Clean up timer after successful minimization
     removeGroupTimer(groupId);
   } catch (error) {
     console.warn(`Failed to minimize group ${groupId}:`, error);
-    // Clean up invalid group
     removeGroupTimer(groupId);
   }
 }
+
+/**
+ * Opens a collapsed group for UX clarity and marks it as recently opened.
+ * This shows users where their tab was placed (important for auto-grouping plugins).
+ */
+async function openGroupForVisibility(groupId: number, windowId: number): Promise<void> {
+  try {
+    const group = await BrowserAPI.tabGroupsGet(groupId);
+    if (group.collapsed) {
+      await BrowserAPI.tabGroups.update(groupId, { collapsed: false });
+      
+      // Mark group as recently opened to prevent immediate re-minimization
+      let groupState = groupTimers.get(groupId);
+      if (!groupState) {
+        groupState = {
+          timer: null,
+          lastActivity: Date.now(),
+          isActive: groupId === activeGroupId,
+          windowId,
+          justOpened: Date.now()
+        };
+        groupTimers.set(groupId, groupState);
+      } else {
+        groupState.justOpened = Date.now();
+      }
+    }
+  } catch (error) {
+    console.warn(`Failed to open group ${groupId}:`, error);
+  }
+}
+
+/**
+ * Reactivates the timer for a group that is no longer active.
+ * Called when switching away from a group.
+ */
+async function reactivateTimerForGroup(groupId: number): Promise<void> {
+  try {
+    const group = await BrowserAPI.tabGroupsGet(groupId);
+    if (!group.collapsed) {
+      const groupTabs = await BrowserAPI.tabsQuery({ groupId });
+      if (groupTabs.length > 0 && groupTabs[0].windowId) {
+        setGroupActive(groupId, false, groupTabs[0].windowId);
+        setGroupTimer(groupId, groupTabs[0].windowId);
+      }
+    }
+  } catch (error) {
+    console.warn(`Failed to reactivate timer for group ${groupId}:`, error);
+  }
+}
+
+// ============================================================================
+// TIMER MANAGEMENT
+// ============================================================================
 
 /**
  * Set or reset a timer for a specific group
@@ -71,6 +137,15 @@ function setGroupTimer(groupId: number, windowId: number): void {
       const hasActiveTabs = groupTabs.some(tab => tab.active);
       
       if (!hasActiveTabs && groupTabs.length > 0) {
+        // Check if group was recently opened (within 5 seconds)
+        const groupState = groupTimers.get(groupId);
+        const now = Date.now();
+        if (groupState?.justOpened && (now - groupState.justOpened) < JUST_OPENED_GRACE_PERIOD_MS) {
+          // Group was recently opened, give it more time
+          setGroupTimer(groupId, groupState.windowId);
+          return;
+        }
+        
         // Check if group is already collapsed
         const group = await BrowserAPI.tabGroupsGet(groupId);
         if (!group.collapsed) {
@@ -172,7 +247,7 @@ function debounceRefreshTimers(): void {
     } catch (error) {
       console.error('Error refreshing group timers:', error);
     }
-  }, 250); // 250ms debounce
+  }, DEBOUNCE_DELAY_MS);
 }
 
 /**
@@ -263,9 +338,13 @@ async function initializeTimers(): Promise<void> {
     await refreshGroupTimers();
   } catch (error) {
     console.error('Error initializing timers:', error);
-    globalTimeout = 30000; // Use default on error
+    globalTimeout = DEFAULT_TIMEOUT_MS;
   }
 }
+
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
 
 /**
  * Event listener for tab activation.
@@ -285,38 +364,12 @@ BrowserAPI.tabs.onActivated.addListener(async function (activeInfo: chrome.tabs.
       
       // If previous group is different, reactivate its timer
       if (previousActiveGroupId && previousActiveGroupId !== activeGroupId) {
-        try {
-          const prevGroup = await BrowserAPI.tabGroupsGet(previousActiveGroupId);
-          if (!prevGroup.collapsed) {
-            // Find window ID by querying tabs in the group
-            const prevGroupTabs = await BrowserAPI.tabsQuery({ groupId: previousActiveGroupId });
-            if (prevGroupTabs.length > 0 && prevGroupTabs[0].windowId) {
-              // Mark as inactive and provide windowId
-              setGroupActive(previousActiveGroupId, false, prevGroupTabs[0].windowId);
-              setGroupTimer(previousActiveGroupId, prevGroupTabs[0].windowId);
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to reactivate timer for previous group:', error);
-        }
+        await reactivateTimerForGroup(previousActiveGroupId);
       }
     } else {
       // Tab is not in a group
       if (previousActiveGroupId) {
-        // Reactivate timer for previous group
-        try {
-          const prevGroup = await BrowserAPI.tabGroupsGet(previousActiveGroupId);
-          if (!prevGroup.collapsed) {
-            const prevGroupTabs = await BrowserAPI.tabsQuery({ groupId: previousActiveGroupId });
-            if (prevGroupTabs.length > 0 && prevGroupTabs[0].windowId) {
-              // Mark as inactive and provide windowId  
-              setGroupActive(previousActiveGroupId, false, prevGroupTabs[0].windowId);
-              setGroupTimer(previousActiveGroupId, prevGroupTabs[0].windowId);
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to reactivate timer for previous group:', error);
-        }
+        await reactivateTimerForGroup(previousActiveGroupId);
       }
       activeGroupId = null;
     }
@@ -327,45 +380,114 @@ BrowserAPI.tabs.onActivated.addListener(async function (activeInfo: chrome.tabs.
 
 /**
  * Event listener for tab creation.
- * Manages group timers when new tabs are created.
+ * Manages group timers when new tabs are created and focuses new groups.
  */
 BrowserAPI.tabs.onCreated.addListener(async function (tab: chrome.tabs.Tab) {
   try {
-    // If tab is created in a group, temporarily pause its timer
-    if (tab.groupId !== -1 && tab.groupId !== activeGroupId) {
-      // Clear existing timer for the group
-      clearGroupTimer(tab.groupId);
+    // If tab is created in a group, open it to show where the tab was placed
+    if (tab.groupId !== -1 && tab.windowId) {
+      await openGroupForVisibility(tab.groupId, tab.windowId);
       
-      // Set a delayed timer to allow for tab settling
-      setTimeout(() => {
-        if (tab.windowId && tab.groupId !== activeGroupId) {
-          setGroupTimer(tab.groupId, tab.windowId);
-        }
-      }, 1000); // 1 second grace period for new tabs
+      // Set timer for non-active groups with grace period
+      if (tab.groupId !== activeGroupId) {
+        const groupId = tab.groupId;
+        const windowId = tab.windowId;
+        
+        clearGroupTimer(groupId);
+        setTimeout(() => {
+          if (groupId !== activeGroupId) {
+            setGroupTimer(groupId, windowId);
+          }
+        }, NEW_TAB_GRACE_PERIOD_MS);
+      }
     }
     
     // Handle opener tab scenario
     if (tab.openerTabId !== undefined) {
       try {
         const openerTab = await BrowserAPI.tabsGet(tab.openerTabId);
-        if (openerTab.groupId !== -1 && openerTab.groupId !== activeGroupId) {
-          // Give grace period for opener group as well
-          clearGroupTimer(openerTab.groupId);
+        if (openerTab.groupId !== -1 && openerTab.groupId !== activeGroupId && openerTab.windowId) {
+          const openerGroupId = openerTab.groupId;
+          const openerWindowId = openerTab.windowId;
+          
+          clearGroupTimer(openerGroupId);
           setTimeout(() => {
-            if (openerTab.windowId && openerTab.groupId !== activeGroupId) {
-              setGroupTimer(openerTab.groupId, openerTab.windowId);
+            if (openerGroupId !== activeGroupId) {
+              setGroupTimer(openerGroupId, openerWindowId);
             }
-          }, 1000);
+          }, NEW_TAB_GRACE_PERIOD_MS);
         }
       } catch (error) {
         console.warn('Failed to handle opener tab:', error);
       }
     }
     
-    // Debounce refresh to handle multiple rapid tab creations
     debounceRefreshTimers();
   } catch (error) {
     console.warn('Failed to handle tab creation:', error);
+  }
+});
+
+/**
+ * Event listener for tab updates.
+ * Handles when tabs are moved into or out of groups.
+ */
+BrowserAPI.tabs.onUpdated.addListener(async function (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) {
+  try {
+    // Check if tab groupId changed
+    if (changeInfo.groupId !== undefined) {
+      // CRITICAL: Check if this is the active tab and update activeGroupId accordingly
+      // This is essential for auto-grouping plugin compatibility
+      if (tab.active) {
+        const previousActiveGroupId = activeGroupId;
+        
+        if (changeInfo.groupId === -1) {
+          // Active tab removed from group
+          activeGroupId = null;
+          if (previousActiveGroupId) {
+            await reactivateTimerForGroup(previousActiveGroupId);
+          }
+        } else {
+          // Active tab moved into a group - update activeGroupId
+          activeGroupId = changeInfo.groupId;
+          setGroupActive(changeInfo.groupId, true, tab.windowId);
+          clearGroupTimer(changeInfo.groupId);
+          
+          // Reactivate timer for previous group if different
+          if (previousActiveGroupId && previousActiveGroupId !== changeInfo.groupId) {
+            await reactivateTimerForGroup(previousActiveGroupId);
+          }
+        }
+      }
+      
+      // Handle UI feedback and timer management for non-active tabs
+      if (changeInfo.groupId === -1) {
+        // Tab removed from group - refresh timers to handle cleanup
+        if (!tab.active) {
+          debounceRefreshTimers();
+        }
+      } else {
+        // Tab moved into a group - open to show where it was grouped
+        if (tab.windowId) {
+          await openGroupForVisibility(changeInfo.groupId, tab.windowId);
+        }
+        
+        // Only set timer for non-active groups
+        if (!tab.active && changeInfo.groupId !== activeGroupId && tab.windowId) {
+          const groupId = changeInfo.groupId;
+          const windowId = tab.windowId;
+          
+          clearGroupTimer(groupId);
+          setTimeout(() => {
+            if (groupId !== activeGroupId) {
+              setGroupTimer(groupId, windowId);
+            }
+          }, NEW_TAB_GRACE_PERIOD_MS);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to handle tab update:', error);
   }
 });
 
@@ -456,10 +578,10 @@ BrowserAPI.storage.onChanged.addListener(function (changes: {[key: string]: chro
  */
 BrowserAPI.runtime.onStartup.addListener(async function () {
   try {
-    // Wait a bit for browser to stabilize
+    // Wait for browser to stabilize before initializing
     setTimeout(async () => {
       await initializeTimers();
-    }, 2000);
+    }, STARTUP_DELAY_MS);
   } catch (error) {
     console.error('Error during startup:', error);
   }
@@ -468,10 +590,9 @@ BrowserAPI.runtime.onStartup.addListener(async function () {
 BrowserAPI.runtime.onInstalled.addListener(async function (details: chrome.runtime.InstalledDetails) {
   try {
     if (details.reason === 'install' || details.reason === 'update') {
-      // Initialize timers after install/update
       setTimeout(async () => {
         await initializeTimers();
-      }, 1000);
+      }, INSTALL_DELAY_MS);
     }
   } catch (error) {
     console.error('Error during install/update:', error);
