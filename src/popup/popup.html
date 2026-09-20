@@ -1,100 +1,131 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Auto Minimize Tab Groups</title>
     <style>
+      :root {
+        --primary: #1a73e8;
+        --primary-hover: #1557b0;
+        --text-primary: #202124;
+        --text-secondary: #5f6368;
+        --bg: #ffffff;
+        --bg-subtle: #f8f9fa;
+        --border: #dadce0;
+        --success-bg: #e6f4ea;
+        --success-text: #137333;
+        --error-bg: #fce8e6;
+        --error-text: #c5221f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        width: 350px;
-        min-height: 200px;
+        width: 320px;
         margin: 0;
         padding: 16px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         font-size: 14px;
-        color: #333;
-        background-color: #fff;
+        color: var(--text-primary);
+        background-color: var(--bg);
       }
+
       .header {
         text-align: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         padding-bottom: 12px;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--border);
       }
+
       .header h1 {
         margin: 0;
         font-size: 16px;
         font-weight: 600;
-        color: #1a73e8;
+        color: var(--primary);
       }
+
       .settings-form {
         display: flex;
         flex-direction: column;
         gap: 12px;
       }
+
       .form-group {
         display: flex;
         flex-direction: column;
         gap: 6px;
       }
+
       .form-group label {
         font-weight: 500;
-        color: #5f6368;
+        color: var(--text-secondary);
         font-size: 13px;
       }
+
       .form-group input[type="number"] {
         padding: 8px 12px;
-        border: 1px solid #dadce0;
+        border: 1px solid var(--border);
         border-radius: 4px;
         font-size: 14px;
-        transition: border-color 0.2s;
+        transition: border-color 0.2s, box-shadow 0.2s;
       }
+
       .form-group input[type="number"]:focus {
         outline: none;
-        border-color: #1a73e8;
+        border-color: var(--primary);
         box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
       }
-      .form-group input[type="number"]:invalid {
-        border-color: #ea4335;
-      }
+
       .help-text {
         font-size: 12px;
-        color: #5f6368;
+        color: var(--text-secondary);
         line-height: 1.4;
       }
+
       .button-group {
         display: flex;
         gap: 8px;
-        margin-top: 8px;
+        margin-top: 4px;
       }
+
       .btn {
         flex: 1;
-        padding: 8px 16px;
+        padding: 8px 14px;
         border: none;
         border-radius: 4px;
         font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: background-color 0.2s, opacity 0.2s;
       }
+
       .btn-primary {
-        background-color: #1a73e8;
+        background-color: var(--primary);
         color: white;
       }
+
       .btn-primary:hover:not(:disabled) {
-        background-color: #1557b0;
+        background-color: var(--primary-hover);
       }
+
       .btn-secondary {
-        background-color: #f8f9fa;
+        background-color: var(--bg-subtle);
         color: #3c4043;
-        border: 1px solid #dadce0;
+        border: 1px solid var(--border);
       }
+
       .btn-secondary:hover:not(:disabled) {
         background-color: #f1f3f4;
       }
+
       .btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
       }
+
       .message {
         padding: 8px 12px;
         border-radius: 4px;
@@ -103,41 +134,40 @@
         margin-top: 8px;
         text-align: center;
       }
+
       .message.success {
-        background-color: #e6f4ea;
-        color: #137333;
+        background-color: var(--success-bg);
+        color: var(--success-text);
         border: 1px solid #ceead6;
       }
+
       .message.error {
-        background-color: #fce8e6;
-        color: #d93025;
-        border: 1px solid #f9ab9d;
+        background-color: var(--error-bg);
+        color: var(--error-text);
+        border: 1px solid #fad2cf;
       }
+
       .status-section {
         margin-top: 16px;
-        padding: 12px;
-        background-color: #f8f9fa;
+        padding: 10px 12px;
+        background-color: var(--bg-subtle);
         border-radius: 6px;
         font-size: 12px;
       }
+
       .status-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 4px;
       }
-      .status-item:last-child {
-        margin-bottom: 0;
-      }
+
       .status-label {
-        color: #5f6368;
+        color: var(--text-secondary);
       }
+
       .status-value {
-        font-weight: 500;
-        color: #1a73e8;
-      }
-      .hidden {
-        display: none;
+        font-weight: 600;
+        color: var(--primary);
       }
     </style>
   </head>
@@ -145,17 +175,25 @@
     <div class="header">
       <h1>Auto Minimize Tab Groups</h1>
     </div>
-    
+
     <form id="settings-form" class="settings-form">
       <div class="form-group">
         <label for="timeout">Timeout (seconds)</label>
-        <input type="number" id="timeout" name="timeout" min="1" max="3600" step="1" 
-               aria-describedby="timeout-help" required>
+        <input
+          type="number"
+          id="timeout"
+          name="timeout"
+          min="1"
+          max="3600"
+          step="1"
+          aria-describedby="timeout-help"
+          required
+        >
         <div id="timeout-help" class="help-text">
-          Time to wait before minimizing inactive tab groups (1-3600 seconds)
+          Time to wait before minimizing inactive tab groups (1–3600s)
         </div>
       </div>
-      
+
       <div class="button-group">
         <button type="submit" class="btn btn-primary" id="save-btn">
           Save
@@ -165,16 +203,16 @@
         </button>
       </div>
     </form>
-    
+
     <div id="message-container"></div>
-    
+
     <div class="status-section">
       <div class="status-item">
         <span class="status-label">Current Timeout:</span>
         <span class="status-value" id="current-timeout">30s</span>
       </div>
     </div>
-    
+
     <script src="popup.js"></script>
   </body>
 </html>

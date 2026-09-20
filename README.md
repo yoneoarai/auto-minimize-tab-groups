@@ -96,35 +96,66 @@ Access the extension settings instantly through:
 ### Build Commands
 
 ```bash
-# Install dependencies
-npm ci
+# Install dependencies locally in ./node_modules
+npm install
 
-# Development build (TypeScript compilation)
-npm run build-local
+# Typecheck TypeScript
+npm run typecheck
 
-# Production build (webpack with optimization)
+# Run unit test suite
+npm test
+
+# Production build for both Chrome and Firefox
 npm run build
 
-# Create distribution package
-npm run package
+# Build for specific browser
+npm run build:chrome
+npm run build:firefox
 
-# Run tests (when implemented)
-npm test
+# Development builds with source maps
+npm run build:dev
+npm run build:dev:chrome
+npm run build:dev:firefox
+
+# Watch mode
+npm run watch:chrome
+npm run watch:firefox
+
+# Create distribution packages (.zip)
+npm run package
+npm run package:chrome
+npm run package:firefox
 ```
 
 ### Project Structure
 
 ```
 src/
-├── background.ts    # Main service worker logic
-├── popup.ts         # Popup interface functionality
-└── popup.html       # Popup interface UI
+├── adapters/          # Browser API implementations and mock adapters
+│   ├── browser-adapter.ts
+│   └── mock-adapter.ts
+├── background/        # Background service worker entry point
+│   └── index.ts
+├── common/            # Shared timing and storage constants
+│   └── constants.ts
+├── core/              # Core business logic decoupled from browser APIs
+│   ├── config-manager.ts
+│   └── group-manager.ts
+├── popup/             # Extension settings popup UI and controller
+│   ├── popup.html
+│   └── popup.ts
+└── types/             # TypeScript domain and browser interfaces
+    ├── browser.ts
+    └── config.ts
 
-dist/               # Build output
-manifest.json       # Extension manifest
-package.json        # Node.js dependencies
-webpack.config.js   # Build configuration
-tsconfig.json       # TypeScript configuration
+tests/                 # Jest unit tests with mock browser environment
+dist/                  # Build output (dist/chrome, dist/firefox)
+scripts/               # Packaging and build automation scripts
+manifest-chrome.json   # Chrome Manifest V3 configuration
+manifest-firefox.json  # Firefox Manifest V3 configuration
+package.json           # Node.js dependencies and scripts
+tsconfig.json          # TypeScript configuration
+webpack.config.js      # Webpack configuration
 ```
 
 

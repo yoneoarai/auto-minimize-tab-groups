@@ -1,4 +1,3 @@
-// webpack.config.js
 const path = require("path");
 const CopyPlugin = require("copy-webpack-plugin");
 
@@ -8,8 +7,8 @@ module.exports = (env, argv) => {
   
   return {
     entry: {
-      background: "./src/common/background.ts",
-      popup: "./src/common/popup.ts",
+      background: "./src/background/index.ts",
+      popup: "./src/popup/popup.ts",
     },
     output: {
       filename: "[name].js",
@@ -23,7 +22,14 @@ module.exports = (env, argv) => {
       rules: [
         {
           test: /\.ts$/,
-          use: "ts-loader",
+          use: [
+            {
+              loader: "ts-loader",
+              options: {
+                transpileOnly: false,
+              },
+            },
+          ],
           exclude: /node_modules/,
         },
       ],
@@ -32,7 +38,7 @@ module.exports = (env, argv) => {
       new CopyPlugin({
         patterns: [
           {
-            from: "src/common/popup.html",
+            from: "src/popup/popup.html",
             to: "popup.html",
           },
           {
@@ -47,18 +53,14 @@ module.exports = (env, argv) => {
       }),
     ],
     target: "web",
-    // Avoid eval() for browser extension security requirements
-    // Use 'source-map' for debugging without eval, false for production
     devtool: isProduction ? false : "source-map",
     optimization: {
       minimize: isProduction,
-      // Ensure no eval-based optimizations for CSP compliance
       concatenateModules: false,
     },
     mode: isProduction ? "production" : "development",
-    // Additional CSP-safe configuration for browser extensions
     performance: {
-      hints: false, // Disable performance hints for extensions
+      hints: false,
     },
   };
 };
