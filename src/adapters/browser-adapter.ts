@@ -94,6 +94,52 @@ export class BrowserAdapter implements IBrowserAdapter {
     });
   }
 
+  public async groupTabs(options: {
+    tabIds: number[];
+    groupId?: number;
+    createProperties?: { windowId?: number };
+  }): Promise<number> {
+    const tabsApi = this.ensureApi('tabs');
+    try {
+      const res = tabsApi.group(options);
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    } catch {
+      // Fallback
+    }
+    return new Promise((resolve, reject) => {
+      tabsApi.group(options, (groupId: number) => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve(groupId);
+        }
+      });
+    });
+  }
+
+  public async ungroupTabs(tabIds: number[]): Promise<void> {
+    const tabsApi = this.ensureApi('tabs');
+    try {
+      const res = tabsApi.ungroup(tabIds);
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    } catch {
+      // Fallback
+    }
+    return new Promise((resolve, reject) => {
+      tabsApi.ungroup(tabIds, () => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
   // ==========================================================================
   // Tab Groups API
   // ==========================================================================
@@ -142,7 +188,7 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async updateTabGroup(
     groupId: number,
-    updateProperties: { collapsed?: boolean; title?: string }
+    updateProperties: { collapsed?: boolean; title?: string; color?: string }
   ): Promise<BrowserTabGroup> {
     const groupsApi = this.ensureApi('tabGroups');
     try {
@@ -159,6 +205,74 @@ export class BrowserAdapter implements IBrowserAdapter {
           reject(new Error(this.api.runtime.lastError.message));
         } else {
           resolve(group);
+        }
+      });
+    });
+  }
+
+  public async moveTabGroup(groupId: number, moveProperties: { index: number }): Promise<void> {
+    const groupsApi = this.ensureApi('tabGroups');
+    try {
+      const res = groupsApi.move(groupId, moveProperties);
+      if (res && typeof res.then === 'function') {
+        await res;
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    return new Promise((resolve, reject) => {
+      groupsApi.move(groupId, moveProperties, () => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  // ==========================================================================
+  // Permissions API
+  // ==========================================================================
+
+  public async requestPermission(permissions: string[]): Promise<boolean> {
+    const permApi = this.ensureApi('permissions');
+    try {
+      const res = permApi.request({ permissions });
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    } catch {
+      // Fallback
+    }
+    return new Promise((resolve, reject) => {
+      permApi.request({ permissions }, (granted: boolean) => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve(Boolean(granted));
+        }
+      });
+    });
+  }
+
+  public async hasPermission(permissions: string[]): Promise<boolean> {
+    const permApi = this.ensureApi('permissions');
+    try {
+      const res = permApi.contains({ permissions });
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    } catch {
+      // Fallback
+    }
+    return new Promise((resolve, reject) => {
+      permApi.contains({ permissions }, (hasPerm: boolean) => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve(Boolean(hasPerm));
         }
       });
     });
@@ -239,9 +353,7 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public onStorageChanged(callback: (changes: Record<string, StorageChange>) => void): void {
     const storageApi = this.ensureApi('storage');
-    storageApi.onChanged.addListener((changes: Record<string, StorageChange>) => {
-      callback(changes);
-    });
+    storageApi.onChanged.addListener(callback);
   }
 
   // ==========================================================================
