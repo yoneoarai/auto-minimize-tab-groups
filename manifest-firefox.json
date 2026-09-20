@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Auto Minimize Tab Groups",
   "author": "yoneoarai@gmail.com",
   "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
@@ -16,14 +16,14 @@
   "icons": {
     "128": "icon.png"
   },
-  "browser_action": {
+  "action": {
     "default_popup": "popup.html",
     "default_title": "Auto Minimize Tab Groups Settings"
   },
   "browser_specific_settings": {
     "gecko": {
       "id": "auto-minimize-tab-groups@yoneoarai.com",
-      "strict_min_version": "109.0"
+      "strict_min_version": "138.0"
     }
   },
   "homepage_url": "https://github.com/yoneoarai/auto-minimize-tab-groups"

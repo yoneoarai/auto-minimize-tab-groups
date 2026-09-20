@@ -1,0 +1,191 @@
+import { GroupManager } from '../src/core/group-manager';
+import { ConfigManager } from '../src/core/config-manager';
+import { MockBrowserAdapter } from '../src/adapters/mock-adapter';
+import {
+  NEW_TAB_GRACE_PERIOD_MS,
+  JUST_OPENED_GRACE_PERIOD_MS,
+  DEBOUNCE_DELAY_MS,
+} from '../src/common/constants';
+
+describe('GroupManager', () => {
+  let mockAdapter: MockBrowserAdapter;
+  let configManager: ConfigManager;
+  let groupManager: GroupManager;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockAdapter = new MockBrowserAdapter();
+    configManager = new ConfigManager(mockAdapter);
+    groupManager = new GroupManager(mockAdapter, configManager);
+
+    // Default window setup
+    mockAdapter.windows.set(1, { id: 1, focused: true });
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it('minimizes an inactive tab group after timeout expires', async () => {
+    const groupId = 101;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+    mockAdapter.tabs.set(1, { id: 1, groupId, windowId: 1, active: false });
+
+    // Set group timer (default 30,000ms)
+    groupManager.setGroupTimer(groupId, 1);
+    expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+    // Fast-forward time and await async chain
+    await jest.advanceTimersByTimeAsync(30000);
+
+    const group = await mockAdapter.getTabGroup(groupId);
+    expect(group.collapsed).toBe(true);
+    expect(groupManager.getGroupState(groupId)).toBeUndefined();
+  });
+
+  it('protects active group from being minimized', async () => {
+    const groupId = 102;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+    mockAdapter.tabs.set(2, { id: 2, groupId, windowId: 1, active: true });
+
+    // Tab activation event
+    await groupManager.handleTabActivated({ tabId: 2, windowId: 1 });
+
+    expect(groupManager.getActiveGroupId()).toBe(groupId);
+    expect(groupManager.getGroupState(groupId)?.isActive).toBe(true);
+    expect(groupManager.getGroupState(groupId)?.timer).toBeNull();
+
+    // Fast-forward time
+    jest.advanceTimersByTime(60000);
+    await Promise.resolve();
+
+    const group = await mockAdapter.getTabGroup(groupId);
+    expect(group.collapsed).toBe(false);
+  });
+
+  it('reactivates timer on previously active group when switching to a new group', async () => {
+    const groupA = 201;
+    const groupB = 202;
+
+    mockAdapter.groups.set(groupA, { id: groupA, collapsed: false, windowId: 1 });
+    mockAdapter.groups.set(groupB, { id: groupB, collapsed: false, windowId: 1 });
+
+    mockAdapter.tabs.set(10, { id: 10, groupId: groupA, windowId: 1, active: true });
+    mockAdapter.tabs.set(20, { id: 20, groupId: groupB, windowId: 1, active: false });
+
+    // Activate tab 10 in Group A
+    await groupManager.handleTabActivated({ tabId: 10, windowId: 1 });
+    expect(groupManager.getActiveGroupId()).toBe(groupA);
+
+    // Switch active tab to tab 20 in Group B
+    mockAdapter.tabs.set(10, { id: 10, groupId: groupA, windowId: 1, active: false });
+    mockAdapter.tabs.set(20, { id: 20, groupId: groupB, windowId: 1, active: true });
+    await groupManager.handleTabActivated({ tabId: 20, windowId: 1 });
+
+    expect(groupManager.getActiveGroupId()).toBe(groupB);
+    // Group A should now have a running inactivity timer
+    expect(groupManager.getGroupState(groupA)?.isActive).toBe(false);
+    expect(groupManager.getGroupState(groupA)?.timer).not.toBeNull();
+
+    // Advance timers to trigger Group A minimization
+    await jest.advanceTimersByTimeAsync(30000);
+
+    expect((await mockAdapter.getTabGroup(groupA)).collapsed).toBe(true);
+    expect((await mockAdapter.getTabGroup(groupB)).collapsed).toBe(false);
+  });
+
+  it('reactivates previous group timer when switching to an ungrouped tab', async () => {
+    const groupId = 301;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+    mockAdapter.tabs.set(1, { id: 1, groupId, windowId: 1, active: true });
+    mockAdapter.tabs.set(2, { id: 2, groupId: -1, windowId: 1, active: false });
+
+    await groupManager.handleTabActivated({ tabId: 1, windowId: 1 });
+    expect(groupManager.getActiveGroupId()).toBe(groupId);
+
+    // Switch to ungrouped tab 2
+    mockAdapter.tabs.set(1, { id: 1, groupId, windowId: 1, active: false });
+    mockAdapter.tabs.set(2, { id: 2, groupId: -1, windowId: 1, active: true });
+    await groupManager.handleTabActivated({ tabId: 2, windowId: 1 });
+
+    expect(groupManager.getActiveGroupId()).toBeNull();
+    expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+  });
+
+  it('uncollapses a group when a tab is added to it for visibility', async () => {
+    const groupId = 401;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: true, windowId: 1 });
+
+    await groupManager.openGroupForVisibility(groupId, 1);
+
+    const group = await mockAdapter.getTabGroup(groupId);
+    expect(group.collapsed).toBe(false);
+    expect(groupManager.getGroupState(groupId)?.justOpened).toBeDefined();
+  });
+
+  it('respects justOpened grace period before minimizing', async () => {
+    const groupId = 501;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: true, windowId: 1 });
+    mockAdapter.tabs.set(1, { id: 1, groupId, windowId: 1, active: false });
+
+    // Open for visibility
+    await groupManager.openGroupForVisibility(groupId, 1);
+
+    // Set custom short timer (e.g. 2s) to fire before grace period (5s) ends
+    groupManager.setGroupTimer(groupId, 1, 2000);
+
+    // Advance 2s
+    await jest.advanceTimersByTimeAsync(2000);
+
+    // Group should still be open because of justOpened grace period
+    let group = await mockAdapter.getTabGroup(groupId);
+    expect(group.collapsed).toBe(false);
+
+    // Now advance past grace period (5s) and timeout
+    await jest.advanceTimersByTimeAsync(JUST_OPENED_GRACE_PERIOD_MS + 30000);
+
+    group = await mockAdapter.getTabGroup(groupId);
+    expect(group.collapsed).toBe(true);
+  });
+
+  it('cleans up deleted groups on full timer refresh', async () => {
+    const group1 = 601;
+    const group2 = 602;
+
+    mockAdapter.groups.set(group1, { id: group1, collapsed: false, windowId: 1 });
+    groupManager.setGroupTimer(group1, 1);
+    groupManager.setGroupTimer(group2, 1); // Group 2 doesn't exist in mockAdapter
+
+    expect(groupManager.getTrackedGroupIds()).toContain(group1);
+    expect(groupManager.getTrackedGroupIds()).toContain(group2);
+
+    await groupManager.cleanupTimers();
+
+    expect(groupManager.getTrackedGroupIds()).toContain(group1);
+    expect(groupManager.getTrackedGroupIds()).not.toContain(group2);
+  });
+
+  it('resets all timers when configuration changes', async () => {
+    const groupId = 701;
+    mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+    mockAdapter.tabs.set(1, { id: 1, groupId, windowId: 1, active: false });
+
+    groupManager.setGroupTimer(groupId, 1);
+    expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+    // Change timeout in configManager
+    await configManager.setTimeoutSeconds(10);
+
+    // Timers are cleared and debounceRefreshTimers is invoked
+    await jest.advanceTimersByTimeAsync(DEBOUNCE_DELAY_MS);
+
+    // Timer re-armed with new 10s timeout
+    expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+    // Advance 10s
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+  });
+});
