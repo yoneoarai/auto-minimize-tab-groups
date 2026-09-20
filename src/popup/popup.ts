@@ -1,5 +1,6 @@
 import { BrowserAdapter } from '../adapters/browser-adapter';
 import { ConfigManager } from '../core/config-manager';
+import { DEFAULT_TIMEOUT_MS } from '../common/constants';
 
 const browserAdapter = new BrowserAdapter();
 const configManager = new ConfigManager(browserAdapter);
@@ -61,8 +62,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Listen to external config changes (e.g. from storage sync)
-  configManager.onConfigChanged((newTimeoutMs) => {
-    const seconds = Math.round(newTimeoutMs / 1000);
+  configManager.onConfigChanged((config) => {
+    const seconds = Math.round((config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000);
     updateStatusDisplay(seconds);
   });
 
