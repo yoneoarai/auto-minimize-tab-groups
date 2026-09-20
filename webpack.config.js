@@ -9,6 +9,7 @@ module.exports = (env, argv) => {
     entry: {
       background: "./src/background/index.ts",
       popup: "./src/popup/popup.ts",
+      options: "./src/options/options.ts",
     },
     output: {
       filename: "[name].js",
@@ -42,6 +43,10 @@ module.exports = (env, argv) => {
             to: "popup.html",
           },
           {
+            from: "src/options/options.html",
+            to: "options.html",
+          },
+          {
             from: `manifest-${browser}.json`,
             to: "manifest.json",
           },
@@ -57,10 +62,6 @@ module.exports = (env, argv) => {
     optimization: {
       minimize: isProduction,
       concatenateModules: false,
-    },
-    mode: isProduction ? "production" : "development",
-    performance: {
-      hints: false,
     },
   };
 };
