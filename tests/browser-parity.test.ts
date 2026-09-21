@@ -150,6 +150,8 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       expect(optionsHtml).toContain('fallback-badge');
       expect(optionsHtml).toContain('Always evaluate last (Fallback)');
       expect(optionsHtml).toContain('Priority (1 = Highest)');
+      expect(optionsHtml).toContain('info-tooltip-wrapper');
+      expect(optionsHtml).toContain('When enabled, tabs that don\'t match any of your specific rules');
     });
 
     it('popup.html contains all critical interactive controls and stats counters', () => {

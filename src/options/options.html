@@ -455,6 +455,98 @@
       color: var(--text-secondary);
     }
 
+    /* Info Tooltip */
+    .info-tooltip-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: help;
+    }
+
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #e8eaed;
+      color: #5f6368;
+      font-size: 11px;
+      font-weight: 700;
+      font-style: italic;
+      font-family: Georgia, serif;
+      line-height: 1;
+      border: 1px solid #dadce0;
+      transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .info-tooltip-wrapper:hover .info-icon,
+    .info-icon:focus {
+      background: var(--primary-color);
+      color: #fff;
+      border-color: var(--primary-color);
+      outline: none;
+    }
+
+    .tooltip-content {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      right: -12px;
+      width: 270px;
+      background: #202124;
+      color: #ffffff;
+      font-size: 11px;
+      line-height: 1.45;
+      padding: 10px 12px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      z-index: 100;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+      transform: translateY(4px);
+      text-align: left;
+      font-style: normal;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-weight: normal;
+    }
+
+    .tooltip-content::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      right: 14px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: #202124 transparent transparent transparent;
+    }
+
+    .tooltip-content strong {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+
+    .tooltip-content p {
+      margin-bottom: 6px;
+      color: #e8eaed;
+    }
+
+    .tooltip-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-tooltip-wrapper:hover .tooltip-content,
+    .info-tooltip-wrapper:focus-within .tooltip-content {
+      visibility: visible;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     .segmented-control {
       display: inline-flex;
       background: #e8eaed;
@@ -721,7 +813,17 @@
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="ordering-label">Catch-All Group:</span>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <span class="ordering-label">Catch-All Group:</span>
+            <div class="info-tooltip-wrapper">
+              <span class="info-icon" tabindex="0" role="button" aria-label="Catch-all group info" title="Catch-all group info">i</span>
+              <div class="tooltip-content" role="tooltip">
+                <strong>Catch-All Group</strong>
+                <p>When enabled, tabs that don't match any of your specific rules above are automatically organized into this fallback group (default: "General").</p>
+                <p>It appears as an entry in the rules list so you can reorder its position in your tab strip, edit its color and name, or configure its priority.</p>
+              </div>
+            </div>
+          </div>
           <label class="switch" style="transform: scale(0.85); transform-origin: center;">
             <input type="checkbox" id="catch-all-toggle">
             <span class="slider"></span>
