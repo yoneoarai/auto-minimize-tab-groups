@@ -551,11 +551,17 @@
           <div id="general-group-colors" class="color-picker-grid"></div>
         </div>
         <div class="form-group">
-          <label>Collapse</label>
+          <label>Auto-Collapse Behavior</label>
           <div class="radio-group">
             <label class="radio-label">
               <input type="radio" name="general-collapse" value="default" checked>
               <span>Use default timeout</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="general-collapse" value="custom">
+              <span>Custom timeout:</span>
+              <input type="number" id="general-custom-timeout" min="1" max="3600" value="5" style="width: 70px; display: inline-block; padding: 4px 6px;">
+              <span>sec</span>
             </label>
             <label class="radio-label">
               <input type="radio" name="general-collapse" value="disabled">

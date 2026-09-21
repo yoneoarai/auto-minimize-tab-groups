@@ -299,6 +299,34 @@ describe('GroupManager', () => {
       expect(group.collapsed).toBe(false);
     });
 
+    it('respects General group independent custom timeout', async () => {
+      await configManager.setGeneralGroup({
+        name: 'General',
+        color: 'grey',
+        collapse: { enabled: true, timeoutMs: 10000 },
+      });
+
+      const generalGroup = 807;
+      mockAdapter.groups.set(generalGroup, {
+        id: generalGroup,
+        title: 'General',
+        color: 'grey',
+        collapsed: false,
+        windowId: 1,
+      });
+      mockAdapter.tabs.set(87, { id: 87, groupId: generalGroup, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+
+      // At 5s (halfway of 10s custom timeout), should still be open
+      await jest.advanceTimersByTimeAsync(5000);
+      expect((await mockAdapter.getTabGroup(generalGroup)).collapsed).toBe(false);
+
+      // At 10s total, should now be collapsed (even though default timeout is 30s)
+      await jest.advanceTimersByTimeAsync(5000);
+      expect((await mockAdapter.getTabGroup(generalGroup)).collapsed).toBe(true);
+    });
+
     it('does not reset an already-running timer on an inactive group when refreshing timers', async () => {
       const groupId = 806;
       mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });

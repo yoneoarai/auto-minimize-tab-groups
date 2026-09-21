@@ -410,32 +410,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     showToast('General group color updated');
   });
 
-  // Wire up general collapse radios
+  // Wire up general collapse radios and custom timeout
   const currentGeneral = configManager.getConfig().generalGroup;
+  const generalCustomTimeoutInput = document.getElementById('general-custom-timeout') as HTMLInputElement;
   const generalCollapseRadios = document.querySelectorAll(
     'input[name="general-collapse"]'
   ) as NodeListOf<HTMLInputElement>;
-  generalCollapseRadios.forEach((r) => {
-    if (currentGeneral?.collapse?.enabled === false && r.value === 'disabled') {
-      r.checked = true;
-    } else if (currentGeneral?.collapse?.enabled !== false && r.value === 'default') {
-      r.checked = true;
+
+  if (currentGeneral?.collapse?.enabled === false) {
+    const disabledRadio = document.querySelector('input[name="general-collapse"][value="disabled"]') as HTMLInputElement;
+    if (disabledRadio) disabledRadio.checked = true;
+  } else if (currentGeneral?.collapse?.timeoutMs !== null && currentGeneral?.collapse?.timeoutMs !== undefined) {
+    const customRadio = document.querySelector('input[name="general-collapse"][value="custom"]') as HTMLInputElement;
+    if (customRadio) customRadio.checked = true;
+    if (generalCustomTimeoutInput) {
+      generalCustomTimeoutInput.value = String(Math.round(currentGeneral.collapse.timeoutMs / 1000));
     }
-    r.addEventListener('change', async () => {
-      const currentGen = configManager.getConfig().generalGroup || {
-        name: 'General',
-        color: 'grey',
-        collapse: { enabled: true, timeoutMs: null },
-      };
-      await configManager.setGeneralGroup({
-        ...currentGen,
-        collapse: {
-          enabled: r.value !== 'disabled',
-          timeoutMs: null,
-        },
-      });
-      showToast('General group collapse updated');
+  } else {
+    const defaultRadio = document.querySelector('input[name="general-collapse"][value="default"]') as HTMLInputElement;
+    if (defaultRadio) defaultRadio.checked = true;
+  }
+
+  const saveGeneralCollapse = async () => {
+    const selectedRadio = document.querySelector('input[name="general-collapse"]:checked') as HTMLInputElement;
+    const choice = selectedRadio?.value || 'default';
+    const currentGen = configManager.getConfig().generalGroup || {
+      name: 'General',
+      color: 'grey',
+      collapse: { enabled: true, timeoutMs: null },
+    };
+
+    let collapse: { enabled: boolean; timeoutMs: number | null } = { enabled: true, timeoutMs: null };
+    if (choice === 'disabled') {
+      collapse = { enabled: false, timeoutMs: null };
+    } else if (choice === 'custom') {
+      const val = Number(generalCustomTimeoutInput?.value) || 5;
+      const validation = ConfigManager.validateTimeoutSeconds(String(val));
+      if (!validation.isValid) {
+        alert(validation.errorMessage);
+        return;
+      }
+      collapse = { enabled: true, timeoutMs: val * 1000 };
+    }
+
+    await configManager.setGeneralGroup({
+      ...currentGen,
+      collapse,
     });
+    showToast('General group collapse updated');
+  };
+
+  generalCollapseRadios.forEach((r) => {
+    r.addEventListener('change', async () => {
+      await saveGeneralCollapse();
+    });
+  });
+
+  generalCustomTimeoutInput?.addEventListener('change', async () => {
+    const customRadio = document.querySelector('input[name="general-collapse"][value="custom"]') as HTMLInputElement;
+    if (customRadio) customRadio.checked = true;
+    await saveGeneralCollapse();
   });
 
   // 4. Group Ordering
