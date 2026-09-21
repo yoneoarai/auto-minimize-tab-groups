@@ -76,18 +76,31 @@ function renderPatternTags(containerId: string, patterns: string[]): void {
 function updateTesterResult(): void {
   const testerInput = document.getElementById('tester-input') as HTMLInputElement;
   const testerResult = document.getElementById('tester-result');
+  const patternInput = document.getElementById('pattern-input') as HTMLInputElement;
   if (!testerInput || !testerResult) return;
 
   const url = testerInput.value.trim();
   if (!url) {
-    testerResult.textContent = 'Enter a URL to test against the patterns above';
+    testerResult.textContent = '';
+    return;
+  }
+
+  // Check all added patterns plus any pending pattern currently typed in patternInput
+  const patternsToTest = [...currentModalPatterns];
+  const pendingPattern = patternInput?.value.trim();
+  if (pendingPattern && !patternsToTest.includes(pendingPattern)) {
+    patternsToTest.unshift(pendingPattern);
+  }
+
+  if (patternsToTest.length === 0) {
+    testerResult.textContent = 'Add a pattern to test against';
     testerResult.className = 'tester-result';
     return;
   }
 
   let matched = false;
   let matchingPattern = '';
-  for (const pattern of currentModalPatterns) {
+  for (const pattern of patternsToTest) {
     if (RuleEngine.testPattern(pattern, url)) {
       matched = true;
       matchingPattern = pattern;
@@ -96,10 +109,10 @@ function updateTesterResult(): void {
   }
 
   if (matched) {
-    testerResult.textContent = `✅ Matches pattern "${matchingPattern}"`;
+    testerResult.textContent = `✅ Matches "${matchingPattern}"`;
     testerResult.className = 'tester-result tester-success';
   } else {
-    testerResult.textContent = '❌ Does not match any pattern';
+    testerResult.textContent = '❌ No match';
     testerResult.className = 'tester-result tester-fail';
   }
 }
@@ -228,6 +241,8 @@ function openRuleDialog(rule?: GroupRule): void {
   if (!dialog || !title || !nameInput || !patternInput) return;
 
   patternInput.value = '';
+  const testerRow = document.getElementById('tester-row');
+  if (testerRow) testerRow.style.display = 'none';
   if (testerInput) testerInput.value = '';
   updateTesterResult();
 
@@ -561,7 +576,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  const toggleTestBtn = document.getElementById('toggle-test-btn');
+  const testerRow = document.getElementById('tester-row');
+  toggleTestBtn?.addEventListener('click', () => {
+    if (!testerRow) return;
+    const isVisible = testerRow.style.display !== 'none';
+    testerRow.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible && testerInput) {
+      testerInput.focus();
+      updateTesterResult();
+    }
+  });
+
+  // Automatically test URL as user types it
   testerInput?.addEventListener('input', updateTesterResult);
+
+  // Automatically test when pattern input changes
+  patternInput?.addEventListener('input', () => {
+    if (testerRow && testerRow.style.display !== 'none') {
+      updateTesterResult();
+    }
+  });
 
   // Prevent Enter key in name or timeout from prematurely submitting form
   ruleForm?.addEventListener('keydown', (e) => {

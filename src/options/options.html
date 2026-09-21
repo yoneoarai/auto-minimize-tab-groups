@@ -622,10 +622,19 @@
       </div>
 
       <div class="form-group">
-        <label>URL Patterns *</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label style="margin-bottom: 0;">URL Patterns *</label>
+          <button type="button" id="toggle-test-btn" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;">Test Pattern</button>
+        </div>
         <div class="patterns-input-container">
           <input type="text" id="pattern-input" placeholder="e.g. *.google.com, github.com">
           <button type="button" id="add-pattern-btn" class="btn btn-secondary btn-sm">+ Add</button>
+        </div>
+        <div id="tester-row" style="display: none; margin-top: 8px; background: #f8f9fa; border: 1px solid #dadce0; border-radius: 4px; padding: 6px 10px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="tester-input" placeholder="Enter sample URL to test as you type (e.g. https://github.com/myrepo)" style="font-size: 12px; padding: 5px 8px; flex: 1;">
+            <div id="tester-result" class="tester-result" style="margin-top: 0; font-size: 12px; white-space: nowrap;"></div>
+          </div>
         </div>
         <div id="patterns-tags" class="patterns-tag-list"></div>
       </div>
@@ -648,13 +657,6 @@
             <span>Disabled (never auto-collapse)</span>
           </label>
         </div>
-      </div>
-
-      <!-- Live Pattern Tester -->
-      <div class="tester-container">
-        <label style="font-size: 12px; font-weight: 600; display: block; margin-bottom: 4px;">Pattern Tester</label>
-        <input type="text" id="tester-input" placeholder="Type a URL to test, e.g. https://github.com/myrepo" style="font-size: 13px; padding: 6px 8px;">
-        <div id="tester-result" class="tester-result">Enter a URL to test against the patterns above</div>
       </div>
 
       <div class="dialog-footer">
