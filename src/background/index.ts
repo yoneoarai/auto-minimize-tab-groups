@@ -84,6 +84,10 @@ configManager.onConfigChanged((config) => {
       tabOrganizer.organizeAllTabs().catch((err) => {
         console.warn('Error organizing tabs on config change:', err);
       });
+    } else {
+      tabOrganizer.orderAllGroups().catch((err) => {
+        console.warn('Error ordering groups on config change:', err);
+      });
     }
     groupManager.refreshGroupTimers().catch((err) => {
       console.warn('Error refreshing timers on config change:', err);

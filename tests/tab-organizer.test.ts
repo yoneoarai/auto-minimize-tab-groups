@@ -271,4 +271,60 @@ describe('TabOrganizer', () => {
       expect(group.title).toBe('Google');
     });
   });
+
+  describe('Group ordering on creation & organization', () => {
+    it('positions newly created group according to manual order instead of leaving it at the end', async () => {
+      // Configure manual ordering
+      await configManager.setGroupOrdering('manual');
+
+      // Rule 0 is GitHub (order 0), Rule 1 is Google (order 1)
+      // First, create Google tab at index 0 (Google group created at index 0)
+      const googleTab = { id: 101, windowId: 1, url: 'https://google.com', active: false, index: 0 };
+      mockAdapter.tabs.set(101, googleTab);
+      await organizer.organizeTab(googleTab);
+
+      const googleGroup = await mockAdapter.getTabGroup((await mockAdapter.getTab(101)).groupId!);
+      expect(googleGroup.title).toBe('Google');
+
+      // Now create GitHub tab at index 5 (end of window)
+      // GitHub rule has order 0, so GitHub group should be ordered BEFORE Google group!
+      const githubTab = { id: 102, windowId: 1, url: 'https://github.com/repo', active: false, index: 5 };
+      mockAdapter.tabs.set(102, githubTab);
+      await organizer.organizeTab(githubTab);
+
+      const githubGroup = await mockAdapter.getTabGroup((await mockAdapter.getTab(102)).groupId!);
+      expect(githubGroup.title).toBe('GitHub');
+
+      // Verify physical tab positions in the window:
+      const tab101After = await mockAdapter.getTab(101);
+      const tab102After = await mockAdapter.getTab(102);
+
+      // GitHub tab (order 0) must now precede Google tab (order 1)!
+      expect(tab102After.index).toBeLessThan(tab101After.index!);
+      expect(tab102After.index).toBe(0);
+      expect(tab101After.index).toBe(1);
+    });
+
+    it('positions newly created groups alphabetically when alphabetical ordering is enabled', async () => {
+      await configManager.setGroupOrdering('alphabetical');
+
+      // First create Google tab at index 0
+      const googleTab = { id: 201, windowId: 1, url: 'https://google.com', active: false, index: 0 };
+      mockAdapter.tabs.set(201, googleTab);
+      await organizer.organizeTab(googleTab);
+
+      // Now create GitHub tab at index 3
+      // 'GitHub' alphabetically precedes 'Google' (G-i vs G-o)
+      const githubTab = { id: 202, windowId: 1, url: 'https://github.com/repo', active: false, index: 3 };
+      mockAdapter.tabs.set(202, githubTab);
+      await organizer.organizeTab(githubTab);
+
+      const tab201After = await mockAdapter.getTab(201);
+      const tab202After = await mockAdapter.getTab(202);
+
+      expect(tab202After.index).toBeLessThan(tab201After.index!);
+      expect(tab202After.index).toBe(0);
+      expect(tab201After.index).toBe(1);
+    });
+  });
 });

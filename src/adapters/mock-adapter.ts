@@ -152,7 +152,21 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     if (!group) {
       throw new Error(`Tab group ${groupId} not found`);
     }
-    // State is maintained in mock
+    const winTabs = Array.from(this.tabs.values())
+      .filter((t) => (t.windowId ?? 1) === (group.windowId ?? 1))
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+    const groupTabs = winTabs.filter((t) => t.groupId === groupId);
+    const nonGroupTabs = winTabs.filter((t) => t.groupId !== groupId);
+
+    let targetIdx = moveProperties.index === -1 ? nonGroupTabs.length : moveProperties.index;
+    targetIdx = Math.max(0, Math.min(targetIdx, nonGroupTabs.length));
+
+    nonGroupTabs.splice(targetIdx, 0, ...groupTabs);
+    nonGroupTabs.forEach((t, idx) => {
+      t.index = idx;
+      this.tabs.set(t.id!, { ...t });
+    });
   }
 
   // ==========================================================================

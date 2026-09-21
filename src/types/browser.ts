@@ -6,6 +6,7 @@ export interface BrowserTab {
   id?: number;
   groupId?: number;
   windowId?: number;
+  index?: number;
   active: boolean;
   openerTabId?: number;
   url?: string;

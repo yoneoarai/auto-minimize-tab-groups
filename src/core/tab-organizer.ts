@@ -11,6 +11,7 @@ export class TabOrganizer {
   private manualOverrides: Set<number> = new Set();
   private pendingGroupAssignments: Set<number> = new Set();
   private tabUrls: Map<number, string> = new Map();
+  private windowOrderPromises: Map<number, Promise<void>> = new Map();
 
   constructor(
     private browserAdapter: IBrowserAdapter,
@@ -135,6 +136,18 @@ export class TabOrganizer {
           color,
         });
 
+        // Immediately position the new group according to configured tab strip order
+        let winId = windowId;
+        if (!winId && tab.id) {
+          try {
+            const freshTab = await this.browserAdapter.getTab(tab.id);
+            winId = freshTab.windowId;
+          } catch {}
+        }
+        if (winId) {
+          await this.orderGroups(winId);
+        }
+
         return newGroupId;
       } finally {
         setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 1000);
@@ -173,45 +186,111 @@ export class TabOrganizer {
   }
 
   /**
+   * Orders groups in all open windows according to configuration.
+   */
+  public async orderAllGroups(): Promise<void> {
+    const config = this.configManager.getConfig();
+    if (!config.enabled) return;
+
+    try {
+      const windows = await this.browserAdapter.getAllWindows({ populate: false });
+      for (const win of windows) {
+        if (win.id) {
+          await this.orderGroups(win.id);
+        }
+      }
+    } catch (error) {
+      console.warn('Error ordering all groups:', error);
+    }
+  }
+
+  /**
    * Orders groups in the specified window according to configuration.
+   * Serializes per-window calls to avoid concurrent ordering races.
    */
   public async orderGroups(windowId: number): Promise<void> {
+    const currentPromise = this.windowOrderPromises.get(windowId) || Promise.resolve();
+    const nextPromise = currentPromise
+      .then(() => this.doOrderGroups(windowId))
+      .catch((err) => {
+        console.warn(`Failed to order groups in window ${windowId}:`, err);
+      });
+    this.windowOrderPromises.set(windowId, nextPromise);
+    return nextPromise;
+  }
+
+  /**
+   * Internal implementation that calculates physical tab strip positions and applies ordered moves.
+   */
+  private async doOrderGroups(windowId: number): Promise<void> {
     if (!this.browserAdapter.moveTabGroup) return;
 
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
 
     try {
-      const groups = await this.browserAdapter.queryTabGroups({ windowId });
-      if (groups.length <= 1) return;
+      const [groups, tabs] = await Promise.all([
+        this.browserAdapter.queryTabGroups({ windowId }),
+        this.browserAdapter.queryTabs({ windowId }),
+      ]);
 
-      const sortedGroups = [...groups];
+      if (groups.length <= 1 || tabs.length <= 1) return;
 
+      // Map each group to its tabs and its current physical visual start position in the window
+      const groupPositionMap = new Map<number, { minIndex: number; tabCount: number }>();
+      for (const group of groups) {
+        const groupTabs = tabs.filter((t) => t.groupId === group.id);
+        if (groupTabs.length > 0) {
+          const minIndex = Math.min(...groupTabs.map((t) => (typeof t.index === 'number' ? t.index : 0)));
+          groupPositionMap.set(group.id, { minIndex, tabCount: groupTabs.length });
+        }
+      }
+
+      // Filter groups to only those with active tabs in this window
+      const activeGroups = groups.filter((g) => groupPositionMap.has(g.id));
+      if (activeGroups.length <= 1) return;
+
+      // Determine the actual current physical order of groups in the tab strip from left to right
+      const currentVisualOrder = [...activeGroups].sort(
+        (a, b) => groupPositionMap.get(a.id)!.minIndex - groupPositionMap.get(b.id)!.minIndex
+      );
+
+      const targetSortedGroups = [...activeGroups];
       if (config.groupOrdering === 'alphabetical') {
-        sortedGroups.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+        targetSortedGroups.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
       } else if (config.groupOrdering === 'manual') {
         const rules = config.rules || [];
         const ruleOrderMap = new Map<string, number>();
         rules.forEach((r, idx) => {
-          ruleOrderMap.set(r.name.trim().toLowerCase(), r.order ?? idx);
+          ruleOrderMap.set(r.name.trim().toLowerCase(), typeof r.order === 'number' ? r.order : idx);
         });
 
-        sortedGroups.sort((a, b) => {
+        targetSortedGroups.sort((a, b) => {
           const titleA = (a.title || '').trim().toLowerCase();
           const titleB = (b.title || '').trim().toLowerCase();
           const orderA = ruleOrderMap.has(titleA) ? ruleOrderMap.get(titleA)! : 9999;
           const orderB = ruleOrderMap.has(titleB) ? ruleOrderMap.get(titleB)! : 9999;
-          return orderA - orderB;
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+          return titleA.localeCompare(titleB);
         });
       }
 
-      // Check if already in order to avoid unnecessary browser layout thrashing
-      const alreadyInOrder = groups.every((g, i) => g.id === sortedGroups[i].id);
+      // Check if the physical visual order already matches the target sorted order
+      const alreadyInOrder = currentVisualOrder.every(
+        (g, i) => g.id === targetSortedGroups[i].id
+      );
       if (alreadyInOrder) return;
 
-      // Reposition groups in order
-      for (const group of sortedGroups) {
-        await this.browserAdapter.moveTabGroup(group.id, { index: -1 });
+      // Position groups starting from the current physical position of the leftmost group
+      const startingIndex = groupPositionMap.get(currentVisualOrder[0].id)!.minIndex;
+      let nextIndex = startingIndex;
+      for (const group of targetSortedGroups) {
+        const info = groupPositionMap.get(group.id);
+        const tabCount = info?.tabCount || 1;
+        await this.browserAdapter.moveTabGroup(group.id, { index: nextIndex });
+        nextIndex += tabCount;
       }
     } catch (error) {
       console.warn(`Failed to order groups in window ${windowId}:`, error);
