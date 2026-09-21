@@ -48,4 +48,5 @@ export interface GroupRule {
   priority: number; // 1-based evaluation priority for pattern matching (1 = highest precedence)
   isFallback?: boolean; // True if this is the catch-all / fallback group for unmatched tabs
   evaluateLast?: boolean; // If true, evaluates after all standard rules regardless of numeric priority
+  [key: string]: any;
 }

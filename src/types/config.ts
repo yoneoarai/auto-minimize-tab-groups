@@ -28,7 +28,7 @@ export interface ExtensionConfigV2 {
  */
 export interface ExtensionConfig {
   /** Schema version for migration support */
-  version?: 2;
+  version?: number;
 
   /** Global enable/disable toggle */
   enabled?: boolean;
@@ -53,6 +53,10 @@ export interface ExtensionConfig {
       enabled: boolean;
       timeoutMs: number | null;
     };
+    order?: number;
+    priority?: number;
+    evaluateLast?: boolean;
+    [key: string]: any;
   };
 
   /** How groups are ordered in the tab strip */
@@ -63,6 +67,9 @@ export interface ExtensionConfig {
 
   /** Whether auto-collapsing is temporarily paused across all groups */
   collapsePaused?: boolean;
+
+  /** Forward compatibility: allow future properties without dropping them */
+  [key: string]: any;
 }
 
 export interface ValidationResult {

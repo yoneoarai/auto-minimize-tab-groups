@@ -182,8 +182,17 @@ export class ConfigManager {
     };
   }
 
+  private isLoadedFromStorage = false;
+
   /**
-   * Normalizes arbitrary config data to guarantee standard v2 schema.
+   * Returns whether configuration was successfully loaded from browser storage.
+   */
+  public isLoaded(): boolean {
+    return this.isLoadedFromStorage;
+  }
+
+  /**
+   * Normalizes arbitrary config data to guarantee standard schema while preserving forward compatibility.
    */
   private normalizeConfig(raw: unknown): ExtensionConfig {
     if (!raw || typeof raw !== 'object') {
@@ -195,11 +204,26 @@ export class ConfigManager {
       data.defaultTimeoutMs ?? data.timeoutMs
     );
 
+    // Extract known fields and preserve unknown future fields for forward compatibility
+    const {
+      version: rawVersion,
+      enabled: rawEnabled,
+      defaultTimeoutMs: _rawDefaultTimeoutMs,
+      timeoutMs: _rawTimeoutMs,
+      rules: rawRules,
+      unmatchedTabBehavior: rawUnmatchedTabBehavior,
+      generalGroup: rawGeneralGroup,
+      groupOrdering: rawGroupOrdering,
+      reorganizeOnRuleChange: rawReorganizeOnRuleChange,
+      collapsePaused: rawCollapsePaused,
+      ...extraConfigProps
+    } = data;
+
     const rules: GroupRule[] = [];
     let hasFallbackRule = false;
 
-    if (Array.isArray(data.rules)) {
-      data.rules.forEach((r: any, idx: number) => {
+    if (Array.isArray(rawRules)) {
+      rawRules.forEach((r: any, idx: number) => {
         if (r && typeof r === 'object' && r.name) {
           const color: TabGroupColor = TAB_GROUP_COLORS.includes(r.color) ? r.color : 'grey';
           const isFallback = Boolean(r.isFallback);
@@ -209,62 +233,93 @@ export class ConfigManager {
 
           if (isFallback || validPatterns.length > 0) {
             if (isFallback) hasFallbackRule = true;
+
+            const {
+              id: rawId,
+              name: _rawName,
+              color: _rawColor,
+              patterns: _rawPatterns,
+              collapse: rawCollapse,
+              order: rawOrder,
+              priority: rawPriority,
+              isFallback: _rawIsFallback,
+              evaluateLast: rawEvaluateLast,
+              ...extraRuleProps
+            } = r;
+
+            const extraCollapseProps =
+              typeof rawCollapse === 'object' && rawCollapse ? { ...rawCollapse } : {};
+            delete (extraCollapseProps as any).enabled;
+            delete (extraCollapseProps as any).timeoutMs;
+
             rules.push({
-              id: typeof r.id === 'string' && r.id ? r.id : (isFallback ? 'catch-all-fallback' : generateRuleId()),
+              ...extraRuleProps,
+              id: typeof rawId === 'string' && rawId ? rawId : (isFallback ? 'catch-all-fallback' : generateRuleId()),
               name: String(r.name).trim(),
               color,
               patterns: isFallback ? [] : validPatterns,
               collapse: {
-                enabled: typeof r.collapse?.enabled === 'boolean' ? r.collapse.enabled : true,
+                ...extraCollapseProps,
+                enabled: typeof rawCollapse?.enabled === 'boolean' ? rawCollapse.enabled : true,
                 timeoutMs:
-                  typeof r.collapse?.timeoutMs === 'number'
-                    ? ConfigManager.parseAndNormalizeTimeoutMs(r.collapse.timeoutMs)
+                  typeof rawCollapse?.timeoutMs === 'number'
+                    ? ConfigManager.parseAndNormalizeTimeoutMs(rawCollapse.timeoutMs)
                     : null,
               },
-              order: typeof r.order === 'number' ? r.order : idx,
+              order: typeof rawOrder === 'number' ? rawOrder : idx,
               priority:
-                typeof r.priority === 'number' && Number.isInteger(r.priority) && r.priority >= 1
-                  ? r.priority
-                  : (typeof r.order === 'number' ? r.order + 1 : idx + 1),
+                typeof rawPriority === 'number' && Number.isInteger(rawPriority) && rawPriority >= 1
+                  ? rawPriority
+                  : (typeof rawOrder === 'number' ? rawOrder + 1 : idx + 1),
               isFallback: isFallback ? true : undefined,
-              evaluateLast: isFallback ? (r.evaluateLast !== false) : undefined,
+              evaluateLast: isFallback ? (rawEvaluateLast !== false) : undefined,
             });
           }
         }
       });
     }
 
+    const extraGeneralGroupProps =
+      typeof rawGeneralGroup === 'object' && rawGeneralGroup ? { ...rawGeneralGroup } : {};
+    delete (extraGeneralGroupProps as any).name;
+    delete (extraGeneralGroupProps as any).color;
+    delete (extraGeneralGroupProps as any).collapse;
+    delete (extraGeneralGroupProps as any).order;
+    delete (extraGeneralGroupProps as any).priority;
+    delete (extraGeneralGroupProps as any).evaluateLast;
+
     let generalGroupName =
-      typeof data.generalGroup?.name === 'string' && data.generalGroup.name.trim()
-        ? data.generalGroup.name.trim()
+      typeof rawGeneralGroup?.name === 'string' && rawGeneralGroup.name.trim()
+        ? rawGeneralGroup.name.trim()
         : DEFAULT_GENERAL_GROUP_NAME;
 
     let generalGroupColor: TabGroupColor =
-      TAB_GROUP_COLORS.includes(data.generalGroup?.color) ? data.generalGroup.color : 'grey';
+      TAB_GROUP_COLORS.includes(rawGeneralGroup?.color) ? rawGeneralGroup.color : 'grey';
 
     let generalGroupCollapse = {
       enabled:
-        typeof data.generalGroup?.collapse?.enabled === 'boolean'
-          ? data.generalGroup.collapse.enabled
+        typeof rawGeneralGroup?.collapse?.enabled === 'boolean'
+          ? rawGeneralGroup.collapse.enabled
           : true,
       timeoutMs:
-        typeof data.generalGroup?.collapse?.timeoutMs === 'number'
-          ? ConfigManager.parseAndNormalizeTimeoutMs(data.generalGroup.collapse.timeoutMs)
+        typeof rawGeneralGroup?.collapse?.timeoutMs === 'number'
+          ? ConfigManager.parseAndNormalizeTimeoutMs(rawGeneralGroup.collapse.timeoutMs)
           : null,
     };
 
-    if (data.unmatchedTabBehavior === 'general-group') {
+    if (rawUnmatchedTabBehavior === 'general-group') {
       if (!hasFallbackRule) {
         rules.push({
+          ...extraGeneralGroupProps,
           id: 'catch-all-fallback',
           name: generalGroupName,
           color: generalGroupColor,
           patterns: [],
           collapse: generalGroupCollapse,
-          order: typeof (data.generalGroup as any)?.order === 'number' ? (data.generalGroup as any).order : rules.length,
-          priority: typeof (data.generalGroup as any)?.priority === 'number' ? (data.generalGroup as any).priority : rules.length + 1,
+          order: typeof (rawGeneralGroup as any)?.order === 'number' ? (rawGeneralGroup as any).order : rules.length,
+          priority: typeof (rawGeneralGroup as any)?.priority === 'number' ? (rawGeneralGroup as any).priority : rules.length + 1,
           isFallback: true,
-          evaluateLast: (data.generalGroup as any)?.evaluateLast !== false,
+          evaluateLast: (rawGeneralGroup as any)?.evaluateLast !== false,
         });
       }
     } else {
@@ -280,6 +335,7 @@ export class ConfigManager {
     const fallbackRule = rules.find((r) => r.isFallback);
     const syncedGeneralGroup = fallbackRule
       ? {
+          ...extraGeneralGroupProps,
           name: fallbackRule.name,
           color: fallbackRule.color,
           collapse: fallbackRule.collapse,
@@ -288,27 +344,34 @@ export class ConfigManager {
           evaluateLast: fallbackRule.evaluateLast,
         }
       : {
+          ...extraGeneralGroupProps,
           name: generalGroupName,
           color: generalGroupColor,
           collapse: generalGroupCollapse,
-          order: (data.generalGroup as any)?.order,
-          priority: (data.generalGroup as any)?.priority,
-          evaluateLast: (data.generalGroup as any)?.evaluateLast,
+          order: (rawGeneralGroup as any)?.order,
+          priority: (rawGeneralGroup as any)?.priority,
+          evaluateLast: (rawGeneralGroup as any)?.evaluateLast,
         };
 
+    const version =
+      typeof rawVersion === 'number' && rawVersion > CONFIG_VERSION
+        ? rawVersion
+        : CONFIG_VERSION;
+
     return {
-      version: CONFIG_VERSION,
-      enabled: typeof data.enabled === 'boolean' ? data.enabled : true,
+      ...extraConfigProps,
+      version,
+      enabled: typeof rawEnabled === 'boolean' ? rawEnabled : true,
       defaultTimeoutMs,
       timeoutMs: defaultTimeoutMs,
       rules,
       unmatchedTabBehavior:
-        data.unmatchedTabBehavior === 'general-group' ? 'general-group' : 'leave-ungrouped',
+        rawUnmatchedTabBehavior === 'general-group' ? 'general-group' : 'leave-ungrouped',
       generalGroup: syncedGeneralGroup as any,
-      groupOrdering: data.groupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
+      groupOrdering: rawGroupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
       reorganizeOnRuleChange:
-        typeof data.reorganizeOnRuleChange === 'boolean' ? data.reorganizeOnRuleChange : true,
-      collapsePaused: Boolean(data.collapsePaused),
+        typeof rawReorganizeOnRuleChange === 'boolean' ? rawReorganizeOnRuleChange : true,
+      collapsePaused: Boolean(rawCollapsePaused),
     };
   }
 
@@ -322,16 +385,20 @@ export class ConfigManager {
 
       if (data[STORAGE_KEYS.CONFIG]) {
         this.currentConfig = this.normalizeConfig(data[STORAGE_KEYS.CONFIG]);
+        this.isLoadedFromStorage = true;
       } else if (data[STORAGE_KEYS.TIMEOUT] !== undefined) {
         // v1 migration
         this.currentConfig = ConfigManager.migrateV1ToV2(data[STORAGE_KEYS.TIMEOUT]);
         await this.saveConfig();
+        this.isLoadedFromStorage = true;
       } else {
         this.currentConfig = createDefaultConfig();
+        this.isLoadedFromStorage = true;
       }
     } catch (error) {
       console.warn('Failed to load configuration from storage, using defaults:', error);
       this.currentConfig = createDefaultConfig();
+      // Storage load failed - note that saveConfig is intentionally NOT called here to prevent overwriting existing data
     }
     return this.getConfig();
   }
@@ -416,7 +483,7 @@ export class ConfigManager {
       id: ruleData.id || generateRuleId(),
       name: ruleData.name.trim(),
       color: ruleData.color,
-      patterns: ruleData.patterns.map((p) => p.trim()).filter(Boolean),
+      patterns: ruleData.patterns.map((p: string) => p.trim()).filter(Boolean),
       collapse: {
         enabled: ruleData.collapse?.enabled ?? true,
         timeoutMs: ruleData.collapse?.timeoutMs ?? null,
@@ -460,7 +527,7 @@ export class ConfigManager {
         existing.isFallback
           ? []
           : (updates.patterns !== undefined
-              ? updates.patterns.map((p) => p.trim()).filter(Boolean)
+              ? updates.patterns.map((p: string) => p.trim()).filter(Boolean)
               : existing.patterns),
       collapse: {
         enabled: updates.collapse?.enabled ?? existing.collapse.enabled,

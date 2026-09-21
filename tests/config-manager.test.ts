@@ -664,4 +664,219 @@ describe('ConfigManager', () => {
       });
     });
   });
+
+  describe('Version Update Persistence & Forward Compatibility', () => {
+    it('preserves 100% of user settings across extension updates', async () => {
+      // Simulate existing user configuration before an extension update
+      const existingUserConfig = {
+        version: CONFIG_VERSION,
+        enabled: true,
+        defaultTimeoutMs: 45000,
+        rules: [
+          {
+            id: 'custom-work-rule',
+            name: 'Work & Code',
+            color: 'blue',
+            patterns: ['github.com', 'jira.atlassian.com'],
+            collapse: { enabled: true, timeoutMs: 15000 },
+            order: 0,
+            priority: 1,
+          },
+          {
+            id: 'custom-media-rule',
+            name: 'Media',
+            color: 'red',
+            patterns: ['youtube.com', 'netflix.com'],
+            collapse: { enabled: false, timeoutMs: null },
+            order: 1,
+            priority: 2,
+          },
+        ],
+        unmatchedTabBehavior: 'general-group',
+        generalGroup: {
+          name: 'Miscellaneous',
+          color: 'purple',
+          collapse: { enabled: true, timeoutMs: 20000 },
+          order: 2,
+          priority: 3,
+          evaluateLast: true,
+        },
+        groupOrdering: 'alphabetical',
+        reorganizeOnRuleChange: false,
+        collapsePaused: false,
+      };
+
+      mockAdapter.storage[STORAGE_KEYS.CONFIG] = JSON.parse(JSON.stringify(existingUserConfig));
+      mockAdapter.storage[STORAGE_KEYS.TIMEOUT] = 45000;
+
+      // Simulate extension reload/update (new instance loading storage)
+      const updatedConfigManager = new ConfigManager(mockAdapter);
+      const loaded = await updatedConfigManager.loadConfig();
+
+      expect(updatedConfigManager.isLoaded()).toBe(true);
+      expect(loaded.defaultTimeoutMs).toBe(45000);
+      expect(loaded.groupOrdering).toBe('alphabetical');
+      expect(loaded.reorganizeOnRuleChange).toBe(false);
+
+      // Verify all rules and catch-all group were preserved without data loss
+      expect(loaded.rules?.length).toBe(3); // 2 standard + 1 catch-all fallback
+      const workRule = loaded.rules?.find((r) => r.id === 'custom-work-rule');
+      expect(workRule).toBeDefined();
+      expect(workRule!.name).toBe('Work & Code');
+      expect(workRule!.color).toBe('blue');
+      expect(workRule!.patterns).toEqual(['github.com', 'jira.atlassian.com']);
+      expect(workRule!.collapse.timeoutMs).toBe(15000);
+
+      const mediaRule = loaded.rules?.find((r) => r.id === 'custom-media-rule');
+      expect(mediaRule).toBeDefined();
+      expect(mediaRule!.collapse.enabled).toBe(false);
+
+      const fallback = loaded.rules?.find((r) => r.isFallback);
+      expect(fallback).toBeDefined();
+      expect(fallback!.name).toBe('Miscellaneous');
+      expect(fallback!.color).toBe('purple');
+      expect(fallback!.collapse.timeoutMs).toBe(20000);
+    });
+
+    it('preserves unknown future fields at root config level (forward compatibility)', async () => {
+      const futureConfig = {
+        version: 3,
+        enabled: true,
+        defaultTimeoutMs: 35000,
+        rules: [
+          {
+            id: 'rule-future',
+            name: 'Development',
+            color: 'green',
+            patterns: ['gitlab.com'],
+            collapse: { enabled: true, timeoutMs: null },
+            order: 0,
+            priority: 1,
+          },
+        ],
+        unmatchedTabBehavior: 'leave-ungrouped',
+        generalGroup: {
+          name: 'General',
+          color: 'grey',
+          collapse: { enabled: true, timeoutMs: null },
+        },
+        groupOrdering: 'manual',
+        reorganizeOnRuleChange: true,
+        collapsePaused: false,
+        // Future hypothetical v3 fields:
+        cloudSyncEnabled: true,
+        autoArchiveIdleGroups: false,
+        customWorkspaceTheme: 'dark-nord',
+      };
+
+      mockAdapter.storage[STORAGE_KEYS.CONFIG] = futureConfig;
+
+      const loaded = await configManager.loadConfig();
+
+      // Higher schema version is retained
+      expect(loaded.version).toBe(3);
+      // Future properties are preserved
+      expect((loaded as any).cloudSyncEnabled).toBe(true);
+      expect((loaded as any).autoArchiveIdleGroups).toBe(false);
+      expect((loaded as any).customWorkspaceTheme).toBe('dark-nord');
+
+      // Modifying a setting and saving also persists the future properties
+      await configManager.setTimeoutSeconds(50);
+      const savedConfig = mockAdapter.storage[STORAGE_KEYS.CONFIG];
+      expect(savedConfig.version).toBe(3);
+      expect(savedConfig.cloudSyncEnabled).toBe(true);
+      expect(savedConfig.autoArchiveIdleGroups).toBe(false);
+      expect(savedConfig.customWorkspaceTheme).toBe('dark-nord');
+      expect(savedConfig.defaultTimeoutMs).toBe(50000);
+    });
+
+    it('preserves unknown future fields inside rules and collapse settings (forward compatibility)', async () => {
+      const futureConfigWithRuleProps = {
+        version: 2,
+        enabled: true,
+        defaultTimeoutMs: 30000,
+        rules: [
+          {
+            id: 'rule-enhanced',
+            name: 'Design',
+            color: 'pink',
+            patterns: ['figma.com'],
+            collapse: {
+              enabled: true,
+              timeoutMs: null,
+              autoCloseIdleTabsAfterMs: 600000, // Future collapse property
+            },
+            order: 0,
+            priority: 1,
+            customIcon: 'palette', // Future rule property
+            pinnedPosition: 'always-first', // Future rule property
+          },
+        ],
+        unmatchedTabBehavior: 'leave-ungrouped',
+        generalGroup: {
+          name: 'General',
+          color: 'grey',
+          collapse: { enabled: true, timeoutMs: null },
+          customBadge: 'INBOX', // Future generalGroup property
+        },
+        groupOrdering: 'manual',
+        reorganizeOnRuleChange: true,
+        collapsePaused: false,
+      };
+
+      mockAdapter.storage[STORAGE_KEYS.CONFIG] = futureConfigWithRuleProps;
+
+      const loaded = await configManager.loadConfig();
+      const rule = loaded.rules?.find((r) => r.id === 'rule-enhanced');
+      expect(rule).toBeDefined();
+      expect((rule as any).customIcon).toBe('palette');
+      expect((rule as any).pinnedPosition).toBe('always-first');
+      expect((rule?.collapse as any).autoCloseIdleTabsAfterMs).toBe(600000);
+      expect((loaded.generalGroup as any).customBadge).toBe('INBOX');
+
+      // Re-saving retains these properties
+      await configManager.setReorganizeOnRuleChange(false);
+      const saved = mockAdapter.storage[STORAGE_KEYS.CONFIG];
+      const savedRule = saved.rules?.find((r: any) => r.id === 'rule-enhanced');
+      expect(savedRule.customIcon).toBe('palette');
+      expect(savedRule.pinnedPosition).toBe('always-first');
+      expect(savedRule.collapse.autoCloseIdleTabsAfterMs).toBe(600000);
+      expect(saved.generalGroup.customBadge).toBe('INBOX');
+    });
+
+    it('does not wipe or corrupt storage when storage read throws a temporary error', async () => {
+      mockAdapter.storage[STORAGE_KEYS.CONFIG] = {
+        version: CONFIG_VERSION,
+        enabled: true,
+        defaultTimeoutMs: 55000,
+        rules: [
+          {
+            id: 'precious-rule',
+            name: 'Precious Rule',
+            color: 'cyan',
+            patterns: ['important.org'],
+            collapse: { enabled: true, timeoutMs: null },
+            order: 0,
+            priority: 1,
+          },
+        ],
+      };
+
+      // Mock storage read failure (e.g. transient extension worker storage glitch)
+      const errorAdapter = new MockBrowserAdapter();
+      errorAdapter.storage = mockAdapter.storage;
+      jest.spyOn(errorAdapter, 'getStorage').mockRejectedValueOnce(new Error('Storage temporarily locked'));
+
+      const resilientConfigManager = new ConfigManager(errorAdapter);
+      const loaded = await resilientConfigManager.loadConfig();
+
+      // configManager returned fallback in memory
+      expect(loaded.defaultTimeoutMs).toBe(DEFAULT_TIMEOUT_MS);
+      expect(resilientConfigManager.isLoaded()).toBe(false);
+
+      // Crucially, storage was NOT overwritten or wiped with defaults!
+      expect(errorAdapter.storage[STORAGE_KEYS.CONFIG].defaultTimeoutMs).toBe(55000);
+      expect(errorAdapter.storage[STORAGE_KEYS.CONFIG].rules[0].name).toBe('Precious Rule');
+    });
+  });
 });
