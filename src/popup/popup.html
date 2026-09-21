@@ -39,6 +39,19 @@
         border-bottom: 1px solid var(--border);
       }
 
+      .title-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .header-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: block;
+      }
+
       .header h1 {
         font-size: 16px;
         font-weight: 600;
@@ -187,7 +200,10 @@
   </head>
   <body>
     <div class="header">
-      <h1>🐱 Tabbi</h1>
+      <div class="title-container">
+        <img src="icons/icon-32.png" alt="Tabbi" class="header-icon">
+        <h1>Tabbi</h1>
+      </div>
       <label class="switch" title="Toggle Tabbi on/off">
         <input type="checkbox" id="popup-enable-toggle" checked>
         <span class="slider"></span>
