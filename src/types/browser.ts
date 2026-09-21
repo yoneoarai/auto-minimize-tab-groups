@@ -6,8 +6,12 @@ export interface BrowserTab {
   id?: number;
   groupId?: number;
   windowId?: number;
+  index?: number;
   active: boolean;
   openerTabId?: number;
+  url?: string;
+  pendingUrl?: string;
+  pinned?: boolean;
 }
 
 export interface BrowserTabGroup {
@@ -31,6 +35,8 @@ export interface TabActiveInfo {
 export interface TabChangeInfo {
   groupId?: number;
   status?: string;
+  url?: string;
+  pinned?: boolean;
 }
 
 export interface TabRemoveInfo {
@@ -53,12 +59,24 @@ export interface IBrowserAdapter {
 
   // Tabs
   getTab(tabId: number): Promise<BrowserTab>;
-  queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean }): Promise<BrowserTab[]>;
+  queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean; lastFocusedWindow?: boolean }): Promise<BrowserTab[]>;
 
   // Tab Groups
   getTabGroup(groupId: number): Promise<BrowserTabGroup>;
   queryTabGroups(queryInfo: { windowId?: number }): Promise<BrowserTabGroup[]>;
-  updateTabGroup(groupId: number, updateProperties: { collapsed?: boolean; title?: string }): Promise<BrowserTabGroup>;
+  updateTabGroup(
+    groupId: number,
+    updateProperties: { collapsed?: boolean; title?: string; color?: string }
+  ): Promise<BrowserTabGroup>;
+
+  // Advanced Tab & Group Management (Tabbi)
+  groupTabs?(options: { tabIds: number[]; groupId?: number; createProperties?: { windowId?: number } }): Promise<number>;
+  ungroupTabs?(tabIds: number[]): Promise<void>;
+  moveTabGroup?(groupId: number, moveProperties: { index: number }): Promise<void>;
+
+  // Permissions
+  requestPermission?(permissions: string[]): Promise<boolean>;
+  hasPermission?(permissions: string[]): Promise<boolean>;
 
   // Windows
   getAllWindows(getInfo?: { populate?: boolean }): Promise<BrowserWindow[]>;
@@ -67,6 +85,13 @@ export interface IBrowserAdapter {
   getStorage(keys: string[]): Promise<Record<string, any>>;
   setStorage(items: Record<string, any>): Promise<void>;
   onStorageChanged(callback: (changes: Record<string, StorageChange>) => void): void;
+
+  // Action Badge, Icon & Commands
+  setIcon?(details: { path: string | Record<number, string> }): Promise<void>;
+  setBadgeText?(details: { text: string }): Promise<void>;
+  setBadgeBackgroundColor?(details: { color: string }): Promise<void>;
+  onCommand?(callback: (command: string) => void): void;
+  openOptionsPage?(): Promise<void>;
 
   // Event Listeners
   onTabActivated(callback: (activeInfo: TabActiveInfo) => void): void;

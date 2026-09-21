@@ -1,25 +1,49 @@
 import { IBrowserAdapter } from '../types/browser';
 import { ExtensionConfig, ValidationResult } from '../types/config';
+import { GroupRule, TabGroupColor } from '../types/rules';
 import {
   DEFAULT_TIMEOUT_MS,
   MIN_TIMEOUT_SECONDS,
   MAX_TIMEOUT_SECONDS,
   STORAGE_KEYS,
+  CONFIG_VERSION,
+  DEFAULT_GENERAL_GROUP_NAME,
+  TAB_GROUP_COLORS,
+  createDefaultConfig,
 } from '../common/constants';
 
+function generateRuleId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `rule-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export class ConfigManager {
-  private currentTimeoutMs: number = DEFAULT_TIMEOUT_MS;
-  private listeners: Set<(newTimeoutMs: number) => void> = new Set();
+  private currentConfig: ExtensionConfig = createDefaultConfig();
+  private listeners: Set<(config: ExtensionConfig) => void> = new Set();
 
   constructor(private browserAdapter: IBrowserAdapter) {
     this.browserAdapter.onStorageChanged((changes) => {
-      if (changes[STORAGE_KEYS.TIMEOUT]) {
-        const rawNewValue = changes[STORAGE_KEYS.TIMEOUT].newValue;
-        const normalized = ConfigManager.parseAndNormalizeTimeoutMs(rawNewValue);
-        if (normalized !== this.currentTimeoutMs) {
-          this.currentTimeoutMs = normalized;
-          this.notifyListeners(normalized);
+      let configChanged = false;
+
+      if (changes[STORAGE_KEYS.CONFIG]) {
+        const rawNew = changes[STORAGE_KEYS.CONFIG].newValue;
+        this.currentConfig = this.normalizeConfig(rawNew);
+        configChanged = true;
+      } else if (changes[STORAGE_KEYS.TIMEOUT]) {
+        // Fallback for v1 storage changes
+        const rawTimeout = changes[STORAGE_KEYS.TIMEOUT].newValue;
+        const normalizedTimeout = ConfigManager.parseAndNormalizeTimeoutMs(rawTimeout);
+        if (normalizedTimeout !== this.currentConfig.defaultTimeoutMs) {
+          this.currentConfig.defaultTimeoutMs = normalizedTimeout;
+          this.currentConfig.timeoutMs = normalizedTimeout;
+          configChanged = true;
         }
+      }
+
+      if (configChanged) {
+        this.notifyListeners(this.currentConfig);
       }
     });
   }
@@ -56,6 +80,69 @@ export class ConfigManager {
   }
 
   /**
+   * Validates a group rule.
+   */
+  public static validateRule(rule: Partial<GroupRule>): ValidationResult {
+    if (!rule || typeof rule !== 'object') {
+      return { isValid: false, errorMessage: 'Rule must be an object.' };
+    }
+
+    if (!rule.name || typeof rule.name !== 'string' || !rule.name.trim()) {
+      return { isValid: false, errorMessage: 'Group name cannot be empty.' };
+    }
+
+    if (!rule.color || !TAB_GROUP_COLORS.includes(rule.color as TabGroupColor)) {
+      return { isValid: false, errorMessage: `Invalid group color: ${rule.color}.` };
+    }
+
+    if (!rule.isFallback) {
+      if (!Array.isArray(rule.patterns) || rule.patterns.length === 0) {
+        return { isValid: false, errorMessage: 'Rule must contain at least one URL pattern.' };
+      }
+
+      for (const pattern of rule.patterns) {
+        if (typeof pattern !== 'string' || !pattern.trim()) {
+          return { isValid: false, errorMessage: 'URL patterns cannot be empty strings.' };
+        }
+      }
+    }
+
+    if (rule.collapse) {
+      if (typeof rule.collapse.enabled !== 'boolean') {
+        return { isValid: false, errorMessage: 'Collapse enabled must be a boolean.' };
+      }
+      if (rule.collapse.timeoutMs !== null && typeof rule.collapse.timeoutMs !== 'number') {
+        return { isValid: false, errorMessage: 'Collapse timeoutMs must be a number or null.' };
+      }
+      if (typeof rule.collapse.timeoutMs === 'number') {
+        if (
+          rule.collapse.timeoutMs < MIN_TIMEOUT_SECONDS * 1000 ||
+          rule.collapse.timeoutMs > MAX_TIMEOUT_SECONDS * 1000
+        ) {
+          return {
+            isValid: false,
+            errorMessage: `Custom timeout must be between ${MIN_TIMEOUT_SECONDS} and ${MAX_TIMEOUT_SECONDS} seconds.`,
+          };
+        }
+      }
+    }
+
+    if (rule.priority !== undefined) {
+      if (typeof rule.priority !== 'number' || !Number.isInteger(rule.priority) || rule.priority < 1) {
+        return { isValid: false, errorMessage: 'Priority must be an integer of 1 or greater.' };
+      }
+    }
+
+    if (rule.order !== undefined) {
+      if (typeof rule.order !== 'number' || !Number.isInteger(rule.order) || rule.order < 0) {
+        return { isValid: false, errorMessage: 'Order must be a non-negative integer.' };
+      }
+    }
+
+    return { isValid: true };
+  }
+
+  /**
    * Validates and normalizes a timeout value in milliseconds.
    * Returns DEFAULT_TIMEOUT_MS if invalid or out of bounds.
    */
@@ -73,35 +160,282 @@ export class ConfigManager {
   }
 
   /**
+   * Migrates v1 configuration (single timeout value) to v2 schema.
+   */
+  public static migrateV1ToV2(v1TimeoutMs: number): ExtensionConfig {
+    const normalized = ConfigManager.parseAndNormalizeTimeoutMs(v1TimeoutMs);
+    return {
+      version: CONFIG_VERSION,
+      enabled: true,
+      defaultTimeoutMs: normalized,
+      timeoutMs: normalized,
+      rules: [],
+      unmatchedTabBehavior: 'leave-ungrouped',
+      generalGroup: {
+        name: DEFAULT_GENERAL_GROUP_NAME,
+        color: 'grey',
+        collapse: { enabled: true, timeoutMs: null },
+      },
+      groupOrdering: 'manual',
+      reorganizeOnRuleChange: true,
+      collapsePaused: false,
+    };
+  }
+
+  private isLoadedFromStorage = false;
+
+  /**
+   * Returns whether configuration was successfully loaded from browser storage.
+   */
+  public isLoaded(): boolean {
+    return this.isLoadedFromStorage;
+  }
+
+  /**
+   * Normalizes arbitrary config data to guarantee standard schema while preserving forward compatibility.
+   */
+  private normalizeConfig(raw: unknown): ExtensionConfig {
+    if (!raw || typeof raw !== 'object') {
+      return createDefaultConfig();
+    }
+
+    const data = raw as any;
+    const defaultTimeoutMs = ConfigManager.parseAndNormalizeTimeoutMs(
+      data.defaultTimeoutMs ?? data.timeoutMs
+    );
+
+    // Extract known fields and preserve unknown future fields for forward compatibility
+    const {
+      version: rawVersion,
+      enabled: rawEnabled,
+      defaultTimeoutMs: _rawDefaultTimeoutMs,
+      timeoutMs: _rawTimeoutMs,
+      rules: rawRules,
+      unmatchedTabBehavior: rawUnmatchedTabBehavior,
+      generalGroup: rawGeneralGroup,
+      groupOrdering: rawGroupOrdering,
+      reorganizeOnRuleChange: rawReorganizeOnRuleChange,
+      collapsePaused: rawCollapsePaused,
+      ...extraConfigProps
+    } = data;
+
+    const rules: GroupRule[] = [];
+    let hasFallbackRule = false;
+
+    if (Array.isArray(rawRules)) {
+      rawRules.forEach((r: any, idx: number) => {
+        if (r && typeof r === 'object' && r.name) {
+          const color: TabGroupColor = TAB_GROUP_COLORS.includes(r.color) ? r.color : 'grey';
+          const isFallback = Boolean(r.isFallback);
+          const validPatterns = Array.isArray(r.patterns)
+            ? r.patterns.filter((p: any) => typeof p === 'string' && p.trim().length > 0)
+            : [];
+
+          if (isFallback || validPatterns.length > 0) {
+            if (isFallback) hasFallbackRule = true;
+
+            const {
+              id: rawId,
+              name: _rawName,
+              color: _rawColor,
+              patterns: _rawPatterns,
+              collapse: rawCollapse,
+              order: rawOrder,
+              priority: rawPriority,
+              isFallback: _rawIsFallback,
+              evaluateLast: rawEvaluateLast,
+              ...extraRuleProps
+            } = r;
+
+            const extraCollapseProps =
+              typeof rawCollapse === 'object' && rawCollapse ? { ...rawCollapse } : {};
+            delete (extraCollapseProps as any).enabled;
+            delete (extraCollapseProps as any).timeoutMs;
+
+            rules.push({
+              ...extraRuleProps,
+              id: typeof rawId === 'string' && rawId ? rawId : (isFallback ? 'catch-all-fallback' : generateRuleId()),
+              name: String(r.name).trim(),
+              color,
+              patterns: isFallback ? [] : validPatterns,
+              collapse: {
+                ...extraCollapseProps,
+                enabled: typeof rawCollapse?.enabled === 'boolean' ? rawCollapse.enabled : true,
+                timeoutMs:
+                  typeof rawCollapse?.timeoutMs === 'number'
+                    ? ConfigManager.parseAndNormalizeTimeoutMs(rawCollapse.timeoutMs)
+                    : null,
+              },
+              order: typeof rawOrder === 'number' ? rawOrder : idx,
+              priority:
+                typeof rawPriority === 'number' && Number.isInteger(rawPriority) && rawPriority >= 1
+                  ? rawPriority
+                  : (typeof rawOrder === 'number' ? rawOrder + 1 : idx + 1),
+              isFallback: isFallback ? true : undefined,
+              evaluateLast: isFallback ? (rawEvaluateLast !== false) : undefined,
+            });
+          }
+        }
+      });
+    }
+
+    const extraGeneralGroupProps =
+      typeof rawGeneralGroup === 'object' && rawGeneralGroup ? { ...rawGeneralGroup } : {};
+    delete (extraGeneralGroupProps as any).name;
+    delete (extraGeneralGroupProps as any).color;
+    delete (extraGeneralGroupProps as any).collapse;
+    delete (extraGeneralGroupProps as any).order;
+    delete (extraGeneralGroupProps as any).priority;
+    delete (extraGeneralGroupProps as any).evaluateLast;
+
+    let generalGroupName =
+      typeof rawGeneralGroup?.name === 'string' && rawGeneralGroup.name.trim()
+        ? rawGeneralGroup.name.trim()
+        : DEFAULT_GENERAL_GROUP_NAME;
+
+    let generalGroupColor: TabGroupColor =
+      TAB_GROUP_COLORS.includes(rawGeneralGroup?.color) ? rawGeneralGroup.color : 'grey';
+
+    let generalGroupCollapse = {
+      enabled:
+        typeof rawGeneralGroup?.collapse?.enabled === 'boolean'
+          ? rawGeneralGroup.collapse.enabled
+          : true,
+      timeoutMs:
+        typeof rawGeneralGroup?.collapse?.timeoutMs === 'number'
+          ? ConfigManager.parseAndNormalizeTimeoutMs(rawGeneralGroup.collapse.timeoutMs)
+          : null,
+    };
+
+    if (rawUnmatchedTabBehavior === 'general-group') {
+      if (!hasFallbackRule) {
+        rules.push({
+          ...extraGeneralGroupProps,
+          id: 'catch-all-fallback',
+          name: generalGroupName,
+          color: generalGroupColor,
+          patterns: [],
+          collapse: generalGroupCollapse,
+          order: typeof (rawGeneralGroup as any)?.order === 'number' ? (rawGeneralGroup as any).order : rules.length,
+          priority: typeof (rawGeneralGroup as any)?.priority === 'number' ? (rawGeneralGroup as any).priority : rules.length + 1,
+          isFallback: true,
+          evaluateLast: (rawGeneralGroup as any)?.evaluateLast !== false,
+        });
+      }
+    } else {
+      const fallbackIdx = rules.findIndex((r) => r.isFallback);
+      if (fallbackIdx !== -1) {
+        const [removed] = rules.splice(fallbackIdx, 1);
+        generalGroupName = removed.name;
+        generalGroupColor = removed.color;
+        generalGroupCollapse = removed.collapse;
+      }
+    }
+
+    const fallbackRule = rules.find((r) => r.isFallback);
+    const syncedGeneralGroup = fallbackRule
+      ? {
+          ...extraGeneralGroupProps,
+          name: fallbackRule.name,
+          color: fallbackRule.color,
+          collapse: fallbackRule.collapse,
+          order: fallbackRule.order,
+          priority: fallbackRule.priority,
+          evaluateLast: fallbackRule.evaluateLast,
+        }
+      : {
+          ...extraGeneralGroupProps,
+          name: generalGroupName,
+          color: generalGroupColor,
+          collapse: generalGroupCollapse,
+          order: (rawGeneralGroup as any)?.order,
+          priority: (rawGeneralGroup as any)?.priority,
+          evaluateLast: (rawGeneralGroup as any)?.evaluateLast,
+        };
+
+    const version =
+      typeof rawVersion === 'number' && rawVersion > CONFIG_VERSION
+        ? rawVersion
+        : CONFIG_VERSION;
+
+    return {
+      ...extraConfigProps,
+      version,
+      enabled: typeof rawEnabled === 'boolean' ? rawEnabled : true,
+      defaultTimeoutMs,
+      timeoutMs: defaultTimeoutMs,
+      rules,
+      unmatchedTabBehavior:
+        rawUnmatchedTabBehavior === 'general-group' ? 'general-group' : 'leave-ungrouped',
+      generalGroup: syncedGeneralGroup as any,
+      groupOrdering: rawGroupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
+      reorganizeOnRuleChange:
+        typeof rawReorganizeOnRuleChange === 'boolean' ? rawReorganizeOnRuleChange : true,
+      collapsePaused: Boolean(rawCollapsePaused),
+    };
+  }
+
+  /**
    * Loads configuration from storage and caches it locally.
+   * Handles transparent v1 to v2 migration.
    */
   public async loadConfig(): Promise<ExtensionConfig> {
     try {
-      const data = await this.browserAdapter.getStorage([STORAGE_KEYS.TIMEOUT]);
-      this.currentTimeoutMs = ConfigManager.parseAndNormalizeTimeoutMs(data[STORAGE_KEYS.TIMEOUT]);
+      const data = await this.browserAdapter.getStorage([STORAGE_KEYS.CONFIG, STORAGE_KEYS.TIMEOUT]);
+
+      if (data[STORAGE_KEYS.CONFIG]) {
+        this.currentConfig = this.normalizeConfig(data[STORAGE_KEYS.CONFIG]);
+        this.isLoadedFromStorage = true;
+      } else if (data[STORAGE_KEYS.TIMEOUT] !== undefined) {
+        // v1 migration
+        this.currentConfig = ConfigManager.migrateV1ToV2(data[STORAGE_KEYS.TIMEOUT]);
+        await this.saveConfig();
+        this.isLoadedFromStorage = true;
+      } else {
+        this.currentConfig = createDefaultConfig();
+        this.isLoadedFromStorage = true;
+      }
     } catch (error) {
       console.warn('Failed to load configuration from storage, using defaults:', error);
-      this.currentTimeoutMs = DEFAULT_TIMEOUT_MS;
+      this.currentConfig = createDefaultConfig();
+      // Storage load failed - note that saveConfig is intentionally NOT called here to prevent overwriting existing data
     }
-    return { timeoutMs: this.currentTimeoutMs };
+    return this.getConfig();
   }
 
   /**
-   * Gets the current timeout in milliseconds.
+   * Saves the current configuration to browser storage and notifies listeners.
+   */
+  public async saveConfig(): Promise<void> {
+    await this.browserAdapter.setStorage({
+      [STORAGE_KEYS.CONFIG]: this.currentConfig,
+      [STORAGE_KEYS.TIMEOUT]: this.currentConfig.defaultTimeoutMs,
+    });
+  }
+
+  /**
+   * Returns a copy of the current configuration.
+   */
+  public getConfig(): ExtensionConfig {
+    return JSON.parse(JSON.stringify(this.currentConfig));
+  }
+
+  /**
+   * Gets the current default timeout in milliseconds.
    */
   public getTimeoutMs(): number {
-    return this.currentTimeoutMs;
+    return this.currentConfig.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   /**
-   * Gets the current timeout in seconds.
+   * Gets the current default timeout in seconds.
    */
   public getTimeoutSeconds(): number {
-    return Math.round(this.currentTimeoutMs / 1000);
+    return Math.round(this.getTimeoutMs() / 1000);
   }
 
   /**
-   * Sets the timeout given in seconds.
+   * Sets the default timeout given in seconds.
    */
   public async setTimeoutSeconds(seconds: number): Promise<void> {
     const validation = ConfigManager.validateTimeoutSeconds(String(seconds));
@@ -109,32 +443,377 @@ export class ConfigManager {
       throw new Error(validation.errorMessage);
     }
     const timeoutMs = seconds * 1000;
-    await this.browserAdapter.setStorage({ [STORAGE_KEYS.TIMEOUT]: timeoutMs });
-    this.currentTimeoutMs = timeoutMs;
-    this.notifyListeners(timeoutMs);
+    this.currentConfig.defaultTimeoutMs = timeoutMs;
+    this.currentConfig.timeoutMs = timeoutMs;
+    await this.saveConfig();
+  }
+
+  /**
+   * Gets all configured group rules, sorted by order.
+   */
+  public getRules(): GroupRule[] {
+    const rules = this.currentConfig.rules || [];
+    return [...rules].sort((a, b) => a.order - b.order).map(r => JSON.parse(JSON.stringify(r)));
+  }
+
+  /**
+   * Gets a rule by its ID.
+   */
+  public getRuleById(id: string): GroupRule | undefined {
+    const rule = (this.currentConfig.rules || []).find((r) => r.id === id);
+    return rule ? JSON.parse(JSON.stringify(rule)) : undefined;
+  }
+
+  /**
+   * Adds a new group rule.
+   */
+  public async addRule(
+    ruleData: Omit<GroupRule, 'id' | 'order' | 'priority'> & { id?: string; order?: number; priority?: number }
+  ): Promise<GroupRule> {
+    const existingRules = this.getRules();
+    let targetOrder = typeof ruleData.order === 'number' && ruleData.order >= 0
+      ? Math.min(ruleData.order, existingRules.length)
+      : existingRules.length;
+
+    let targetPriority = typeof ruleData.priority === 'number' && ruleData.priority >= 1
+      ? Math.floor(ruleData.priority)
+      : 1;
+
+    const newRule: GroupRule = {
+      id: ruleData.id || generateRuleId(),
+      name: ruleData.name.trim(),
+      color: ruleData.color,
+      patterns: ruleData.patterns.map((p: string) => p.trim()).filter(Boolean),
+      collapse: {
+        enabled: ruleData.collapse?.enabled ?? true,
+        timeoutMs: ruleData.collapse?.timeoutMs ?? null,
+      },
+      order: targetOrder,
+      priority: targetPriority,
+    };
+
+    const validation = ConfigManager.validateRule(newRule);
+    if (!validation.isValid) {
+      throw new Error(validation.errorMessage);
+    }
+
+    existingRules.splice(targetOrder, 0, newRule);
+    existingRules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = existingRules;
+    await this.saveConfig();
+    return newRule;
+  }
+
+  /**
+   * Updates an existing rule by ID.
+   */
+  public async updateRule(id: string, updates: Partial<Omit<GroupRule, 'id'>>): Promise<void> {
+    const currentRules = this.getRules();
+    const index = currentRules.findIndex((r) => r.id === id);
+    if (index === -1) {
+      throw new Error(`Rule with ID "${id}" not found.`);
+    }
+
+    const existing = currentRules[index];
+    const updated: GroupRule = {
+      ...existing,
+      ...updates,
+      id: existing.id,
+      name: updates.name !== undefined ? updates.name.trim() : existing.name,
+      patterns:
+        existing.isFallback
+          ? []
+          : (updates.patterns !== undefined
+              ? updates.patterns.map((p: string) => p.trim()).filter(Boolean)
+              : existing.patterns),
+      collapse: {
+        enabled: updates.collapse?.enabled ?? existing.collapse.enabled,
+        timeoutMs: updates.collapse?.timeoutMs !== undefined ? updates.collapse.timeoutMs : existing.collapse.timeoutMs,
+      },
+      priority: updates.priority !== undefined ? updates.priority : existing.priority,
+      evaluateLast: updates.evaluateLast !== undefined ? updates.evaluateLast : existing.evaluateLast,
+      isFallback: existing.isFallback,
+    };
+
+    const validation = ConfigManager.validateRule(updated);
+    if (!validation.isValid) {
+      throw new Error(validation.errorMessage);
+    }
+
+    if (typeof updates.order === 'number' && updates.order !== existing.order) {
+      currentRules.splice(index, 1);
+      const newPos = Math.max(0, Math.min(updates.order, currentRules.length));
+      currentRules.splice(newPos, 0, updated);
+    } else {
+      currentRules[index] = updated;
+    }
+
+    currentRules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = currentRules;
+
+    if (updated.isFallback) {
+      this.currentConfig.generalGroup = {
+        name: updated.name,
+        color: updated.color,
+        collapse: updated.collapse,
+      };
+    }
+
+    await this.saveConfig();
+  }
+
+  /**
+   * Moves a rule up or down in tab strip ordering.
+   */
+  public async moveRule(id: string, direction: 'up' | 'down'): Promise<void> {
+    const rules = this.getRules();
+    const index = rules.findIndex((r) => r.id === id);
+    if (index === -1) return;
+
+    if (direction === 'up' && index > 0) {
+      const temp = rules[index];
+      rules[index] = rules[index - 1];
+      rules[index - 1] = temp;
+    } else if (direction === 'down' && index < rules.length - 1) {
+      const temp = rules[index];
+      rules[index] = rules[index + 1];
+      rules[index + 1] = temp;
+    } else {
+      return;
+    }
+
+    rules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = rules;
+    await this.saveConfig();
+  }
+
+  /**
+   * Deletes a rule by ID.
+   */
+  public async deleteRule(id: string): Promise<void> {
+    const existingRule = (this.currentConfig.rules || []).find((r) => r.id === id);
+    if (existingRule?.isFallback) {
+      throw new Error('Cannot delete the catch-all fallback group.');
+    }
+
+    const initialLength = (this.currentConfig.rules || []).length;
+    this.currentConfig.rules = (this.currentConfig.rules || []).filter((r) => r.id !== id);
+
+    if (this.currentConfig.rules.length === initialLength) {
+      throw new Error(`Rule with ID "${id}" not found.`);
+    }
+
+    // Re-index remaining rules
+    this.currentConfig.rules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    await this.saveConfig();
+  }
+
+  /**
+   * Reorders rules given a list of ordered rule IDs.
+   */
+  public async reorderRules(orderedIds: string[]): Promise<void> {
+    const currentRules = this.currentConfig.rules || [];
+    const ruleMap = new Map(currentRules.map((r) => [r.id, r]));
+
+    const reordered: GroupRule[] = [];
+    orderedIds.forEach((id) => {
+      const rule = ruleMap.get(id);
+      if (rule) {
+        reordered.push(rule);
+        ruleMap.delete(id);
+      }
+    });
+
+    // Append any rules not explicitly included in orderedIds
+    for (const rule of ruleMap.values()) {
+      reordered.push(rule);
+    }
+
+    reordered.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = reordered;
+    await this.saveConfig();
+  }
+
+  /**
+   * Enables or disables Tabbi.
+   */
+  public async setEnabled(enabled: boolean): Promise<void> {
+    this.currentConfig.enabled = Boolean(enabled);
+    await this.saveConfig();
+  }
+
+  /**
+   * Returns whether auto-collapsing is currently paused across all groups.
+   */
+  public isCollapsePaused(): boolean {
+    return Boolean(this.currentConfig.collapsePaused);
+  }
+
+  /**
+   * Pauses or resumes auto-collapsing across all groups.
+   */
+  public async setCollapsePaused(paused: boolean): Promise<void> {
+    this.currentConfig.collapsePaused = Boolean(paused);
+    await this.saveConfig();
+  }
+
+  /**
+   * Sets unmatched tab behavior.
+   */
+  public async setUnmatchedBehavior(behavior: 'leave-ungrouped' | 'general-group'): Promise<void> {
+    if (behavior !== 'leave-ungrouped' && behavior !== 'general-group') {
+      throw new Error(`Invalid unmatched tab behavior: ${behavior}`);
+    }
+    this.currentConfig.unmatchedTabBehavior = behavior;
+    const currentRules = this.currentConfig.rules || [];
+    const fallbackIdx = currentRules.findIndex((r) => r.isFallback);
+
+    if (behavior === 'general-group') {
+      if (fallbackIdx === -1) {
+        const gen = this.currentConfig.generalGroup || {
+          name: DEFAULT_GENERAL_GROUP_NAME,
+          color: 'grey',
+          collapse: { enabled: true, timeoutMs: null },
+        };
+        const order = typeof (gen as any).order === 'number' ? (gen as any).order : currentRules.length;
+        const priority = typeof (gen as any).priority === 'number' ? (gen as any).priority : currentRules.length + 1;
+        const evaluateLast = (gen as any).evaluateLast !== false;
+        currentRules.push({
+          id: 'catch-all-fallback',
+          name: gen.name,
+          color: gen.color,
+          patterns: [],
+          collapse: gen.collapse,
+          order,
+          priority,
+          isFallback: true,
+          evaluateLast,
+        });
+      }
+    } else {
+      if (fallbackIdx !== -1) {
+        const [fallbackRule] = currentRules.splice(fallbackIdx, 1);
+        this.currentConfig.generalGroup = {
+          name: fallbackRule.name,
+          color: fallbackRule.color,
+          collapse: fallbackRule.collapse,
+          order: fallbackRule.order,
+          priority: fallbackRule.priority,
+          evaluateLast: fallbackRule.evaluateLast,
+        } as any;
+        currentRules.forEach((r, idx) => {
+          r.order = idx;
+        });
+      }
+    }
+
+    this.currentConfig.rules = currentRules;
+    await this.saveConfig();
+  }
+
+  /**
+   * Updates general group settings.
+   */
+  public async setGeneralGroup(settings: ExtensionConfig['generalGroup']): Promise<void> {
+    if (!settings) {
+      throw new Error('General group settings cannot be empty.');
+    }
+    this.currentConfig.generalGroup = {
+      name: settings.name.trim() || DEFAULT_GENERAL_GROUP_NAME,
+      color: TAB_GROUP_COLORS.includes(settings.color) ? settings.color : 'grey',
+      collapse: {
+        enabled: Boolean(settings.collapse?.enabled),
+        timeoutMs: settings.collapse?.timeoutMs ?? null,
+      },
+    };
+
+    const fallbackRule = (this.currentConfig.rules || []).find((r) => r.isFallback);
+    if (fallbackRule) {
+      fallbackRule.name = this.currentConfig.generalGroup.name;
+      fallbackRule.color = this.currentConfig.generalGroup.color;
+      fallbackRule.collapse = this.currentConfig.generalGroup.collapse;
+    }
+
+    await this.saveConfig();
+  }
+
+  /**
+   * Sets group ordering mode.
+   */
+  public async setGroupOrdering(ordering: 'manual' | 'alphabetical'): Promise<void> {
+    this.currentConfig.groupOrdering = ordering;
+    await this.saveConfig();
+  }
+
+  /**
+   * Sets reorganize on rule change flag.
+   */
+  public async setReorganizeOnRuleChange(reorganize: boolean): Promise<void> {
+    this.currentConfig.reorganizeOnRuleChange = Boolean(reorganize);
+    await this.saveConfig();
+  }
+
+  /**
+   * Imports configuration from JSON or object.
+   */
+  public async importConfig(imported: unknown): Promise<void> {
+    let parsed = imported;
+    if (typeof imported === 'string') {
+      try {
+        parsed = JSON.parse(imported);
+      } catch {
+        throw new Error('Invalid JSON format.');
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Invalid configuration: Root must be an object.');
+    }
+
+    const obj = parsed as Record<string, any>;
+    if (obj.rules !== undefined && !Array.isArray(obj.rules)) {
+      throw new Error('Invalid configuration: "rules" must be an array.');
+    }
+
+    this.currentConfig = this.normalizeConfig(parsed);
+    await this.saveConfig();
   }
 
   /**
    * Resets configuration to default values.
    */
   public async resetToDefault(): Promise<void> {
-    await this.browserAdapter.setStorage({ [STORAGE_KEYS.TIMEOUT]: DEFAULT_TIMEOUT_MS });
-    this.currentTimeoutMs = DEFAULT_TIMEOUT_MS;
-    this.notifyListeners(DEFAULT_TIMEOUT_MS);
+    this.currentConfig = createDefaultConfig();
+    await this.saveConfig();
   }
 
   /**
    * Subscribes to configuration changes.
    */
-  public onConfigChanged(listener: (newTimeoutMs: number) => void): () => void {
+  public onConfigChanged(listener: (config: ExtensionConfig) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private notifyListeners(newTimeoutMs: number): void {
+  private notifyListeners(config: ExtensionConfig): void {
     for (const listener of this.listeners) {
       try {
-        listener(newTimeoutMs);
+        listener(config);
       } catch (err) {
         console.error('Error in config change listener:', err);
       }

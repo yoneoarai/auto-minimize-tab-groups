@@ -1,6 +1,14 @@
-import { IBrowserAdapter, BrowserTab, TabActiveInfo, TabChangeInfo, TabRemoveInfo, BrowserTabGroup } from '../types/browser';
+import {
+  IBrowserAdapter,
+  BrowserTab,
+  TabActiveInfo,
+  TabChangeInfo,
+  TabRemoveInfo,
+  BrowserTabGroup,
+} from '../types/browser';
 import { ConfigManager } from './config-manager';
 import {
+  DEFAULT_TIMEOUT_MS,
   DEBOUNCE_DELAY_MS,
   NEW_TAB_GRACE_PERIOD_MS,
   JUST_OPENED_GRACE_PERIOD_MS,
@@ -18,6 +26,7 @@ export class GroupManager {
   private groupTimers = new Map<number, GroupState>();
   private activeGroupId: number | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private groupMetadata = new Map<number, { title: string; color: string }>();
 
   constructor(
     private browserAdapter: IBrowserAdapter,
@@ -26,6 +35,17 @@ export class GroupManager {
     // Listen to configuration updates to reset timers with new timeout
     this.configManager.onConfigChanged(() => {
       this.resetAllTimers();
+    });
+  }
+
+  /**
+   * Sets group metadata for rule matching.
+   */
+  public setGroupMetadata(groupId: number, metadata: { title?: string; color?: string }): void {
+    const existing = this.groupMetadata.get(groupId) || { title: '', color: '' };
+    this.groupMetadata.set(groupId, {
+      title: metadata.title !== undefined ? metadata.title : existing.title,
+      color: metadata.color !== undefined ? metadata.color : existing.color,
     });
   }
 
@@ -52,6 +72,79 @@ export class GroupManager {
   }
 
   /**
+   * Resolves synchronous collapse settings for a group using cached metadata and config.
+   */
+  public getCollapseSettings(groupId: number): { enabled: boolean; timeoutMs: number } {
+    const config = this.configManager.getConfig();
+    const defaultTimeoutMs = config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+    if (config.enabled === false || config.collapsePaused === true) {
+      return { enabled: false, timeoutMs: defaultTimeoutMs };
+    }
+
+    const meta = this.groupMetadata.get(groupId);
+    if (!meta) {
+      return { enabled: true, timeoutMs: defaultTimeoutMs };
+    }
+
+    const title = (meta.title || '').trim().toLowerCase();
+    const color = (meta.color || '').trim().toLowerCase();
+
+    const rules = config.rules || [];
+    for (const rule of rules) {
+      const ruleName = (rule.name || '').trim().toLowerCase();
+      const ruleColor = (rule.color || '').trim().toLowerCase();
+
+      if (ruleName && title && ruleName === title) {
+        return {
+          enabled: rule.collapse.enabled,
+          timeoutMs: rule.collapse.timeoutMs ?? defaultTimeoutMs,
+        };
+      }
+      if (ruleColor && color && ruleColor === color && !ruleName) {
+        return {
+          enabled: rule.collapse.enabled,
+          timeoutMs: rule.collapse.timeoutMs ?? defaultTimeoutMs,
+        };
+      }
+    }
+
+    // Check General Group
+    if (config.generalGroup) {
+      const ggName = (config.generalGroup.name || '').trim().toLowerCase();
+      if (ggName && title && ggName === title) {
+        return {
+          enabled: config.generalGroup.collapse.enabled,
+          timeoutMs: config.generalGroup.collapse.timeoutMs ?? defaultTimeoutMs,
+        };
+      }
+    }
+
+    return { enabled: true, timeoutMs: defaultTimeoutMs };
+  }
+
+  /**
+   * Resolves collapse settings for a group asynchronously, querying the browser if needed.
+   */
+  public async resolveCollapseSettings(
+    groupId: number
+  ): Promise<{ enabled: boolean; timeoutMs: number }> {
+    try {
+      const group = await this.browserAdapter.getTabGroup(groupId);
+      if (group) {
+        this.setGroupMetadata(groupId, {
+          title: group.title || '',
+          color: group.color || '',
+        });
+      }
+    } catch {
+      // Group might not exist or adapter error
+    }
+
+    return this.getCollapseSettings(groupId);
+  }
+
+  /**
    * Minimizes a tab group and cleans up its timer.
    */
   public async minimizeTabGroup(groupId: number): Promise<void> {
@@ -70,6 +163,11 @@ export class GroupManager {
   public async openGroupForVisibility(groupId: number, windowId: number): Promise<void> {
     try {
       const group = await this.browserAdapter.getTabGroup(groupId);
+      this.setGroupMetadata(groupId, {
+        title: group.title || '',
+        color: group.color || '',
+      });
+
       if (group.collapsed) {
         await this.browserAdapter.updateTabGroup(groupId, { collapsed: false });
 
@@ -96,12 +194,34 @@ export class GroupManager {
    * Sets or resets the inactivity timer for a specific group.
    */
   public setGroupTimer(groupId: number, windowId: number, customDelayMs?: number): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      this.removeGroupTimer(groupId);
+      return;
+    }
+
+    // Active groups should never have a collapse timer armed
+    if (groupId === this.activeGroupId) {
+      this.clearGroupTimer(groupId);
+      return;
+    }
+
     const existingState = this.groupTimers.get(groupId);
     if (existingState?.timer) {
       clearTimeout(existingState.timer);
     }
 
-    const timeoutDelay = customDelayMs ?? this.configManager.getTimeoutMs();
+    // Check cached settings
+    if (this.groupMetadata.has(groupId) && customDelayMs === undefined) {
+      const settings = this.getCollapseSettings(groupId);
+      if (!settings.enabled) {
+        this.removeGroupTimer(groupId);
+        return;
+      }
+    }
+
+    const initialSettings = this.getCollapseSettings(groupId);
+    const timeoutDelay = customDelayMs ?? initialSettings.timeoutMs;
 
     const timer = setTimeout(async () => {
       await this.handleTimerFired(groupId);
@@ -116,6 +236,19 @@ export class GroupManager {
     };
 
     this.groupTimers.set(groupId, groupState);
+
+    // If metadata was not cached yet, fetch it asynchronously
+    if (!this.groupMetadata.has(groupId) && customDelayMs === undefined) {
+      this.resolveCollapseSettings(groupId)
+        .then((settings) => {
+          if (!settings.enabled) {
+            this.removeGroupTimer(groupId);
+          } else if (settings.timeoutMs !== timeoutDelay && groupId !== this.activeGroupId) {
+            this.setGroupTimer(groupId, windowId, settings.timeoutMs);
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   /**
@@ -171,8 +304,18 @@ export class GroupManager {
    * Reactivates the timer for a group when focus switches away from it.
    */
   public async reactivateTimerForGroup(groupId: number): Promise<void> {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
+
     try {
       const group = await this.browserAdapter.getTabGroup(groupId);
+      this.setGroupMetadata(groupId, {
+        title: group.title || '',
+        color: group.color || '',
+      });
+
       if (!group.collapsed) {
         const groupTabs = await this.browserAdapter.queryTabs({ groupId });
         if (groupTabs.length > 0 && groupTabs[0].windowId) {
@@ -190,8 +333,20 @@ export class GroupManager {
    */
   private async handleTimerFired(groupId: number): Promise<void> {
     try {
+      const config = this.configManager.getConfig();
+      if (config.enabled === false || config.collapsePaused === true) {
+        this.removeGroupTimer(groupId);
+        return;
+      }
+
+      const settings = await this.resolveCollapseSettings(groupId);
+      if (!settings.enabled) {
+        this.removeGroupTimer(groupId);
+        return;
+      }
+
       const groupState = this.groupTimers.get(groupId);
-      if (!groupState || groupState.isActive) {
+      if (!groupState || groupState.isActive || groupId === this.activeGroupId) {
         return;
       }
 
@@ -201,8 +356,9 @@ export class GroupManager {
       if (!hasActiveTabs && groupTabs.length > 0) {
         const now = Date.now();
         if (groupState.justOpened && now - groupState.justOpened < JUST_OPENED_GRACE_PERIOD_MS) {
-          // Re-arm timer with remaining grace period
-          this.setGroupTimer(groupId, groupState.windowId);
+          const remainingGrace = JUST_OPENED_GRACE_PERIOD_MS - (now - groupState.justOpened);
+          delete groupState.justOpened;
+          this.setGroupTimer(groupId, groupState.windowId, Math.max(remainingGrace, 100));
           return;
         }
 
@@ -225,6 +381,11 @@ export class GroupManager {
    * Debounces a full refresh of all tab group timers.
    */
   public debounceRefreshTimers(): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
@@ -242,8 +403,33 @@ export class GroupManager {
    * Refreshes timers for all tab groups across all browser windows.
    */
   public async refreshGroupTimers(): Promise<void> {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
     try {
+      const config = this.configManager.getConfig();
+      if (config.enabled === false || config.collapsePaused === true) {
+        for (const [, state] of this.groupTimers) {
+          if (state.timer) {
+            clearTimeout(state.timer);
+          }
+        }
+        this.groupTimers.clear();
+        return;
+      }
+
       const windows = await this.browserAdapter.getAllWindows({ populate: false });
+
+      // Recover activeGroupId from active tab in the currently focused window
+      try {
+        const activeTabs = await this.browserAdapter.queryTabs({ active: true, lastFocusedWindow: true });
+        const focusedActiveTab = activeTabs.find((t) => t.groupId && t.groupId > 0);
+        this.activeGroupId = focusedActiveTab?.groupId ?? null;
+      } catch {
+        // Non-fatal if query fails
+      }
 
       for (const window of windows) {
         if (!window.id) continue;
@@ -252,16 +438,26 @@ export class GroupManager {
           const groups = await this.browserAdapter.queryTabGroups({ windowId: window.id });
 
           for (const group of groups) {
+            this.setGroupMetadata(group.id, {
+              title: group.title || '',
+              color: group.color || '',
+            });
+
             if (group.collapsed) continue;
 
             const groupId = group.id;
             const isActiveGroup = groupId === this.activeGroupId;
+            const existing = this.groupTimers.get(groupId);
 
             if (isActiveGroup) {
               this.clearGroupTimer(groupId);
               this.setGroupActive(groupId, true, window.id);
             } else {
-              this.setGroupTimer(groupId, window.id);
+              // Only start a timer if one is not already running, preventing timer resets
+              // during unrelated events (e.g. tabs opening/closing in other groups)
+              if (!existing?.timer) {
+                this.setGroupTimer(groupId, window.id);
+              }
               this.setGroupActive(groupId, false, window.id);
             }
           }
@@ -317,7 +513,11 @@ export class GroupManager {
       }
     }
     this.groupTimers.clear();
-    this.debounceRefreshTimers();
+
+    const config = this.configManager.getConfig();
+    if (config.enabled !== false && config.collapsePaused !== true) {
+      this.debounceRefreshTimers();
+    }
   }
 
   // ==========================================================================
@@ -339,10 +539,10 @@ export class GroupManager {
           await this.reactivateTimerForGroup(previousActiveGroupId);
         }
       } else {
+        this.activeGroupId = null;
         if (previousActiveGroupId) {
           await this.reactivateTimerForGroup(previousActiveGroupId);
         }
-        this.activeGroupId = null;
       }
     } catch (error) {
       console.warn('Failed to handle tab activation:', error);
@@ -353,7 +553,14 @@ export class GroupManager {
     try {
       if (tab.groupId !== undefined && tab.groupId !== -1 && tab.windowId) {
         await this.openGroupForVisibility(tab.groupId, tab.windowId);
+      }
 
+      const config = this.configManager.getConfig();
+      if (config.enabled === false || config.collapsePaused === true) {
+        return;
+      }
+
+      if (tab.groupId !== undefined && tab.groupId !== -1 && tab.windowId) {
         if (tab.groupId !== this.activeGroupId) {
           const groupId = tab.groupId;
           const windowId = tab.windowId;
@@ -423,8 +630,11 @@ export class GroupManager {
           }
         }
 
+        const config = this.configManager.getConfig();
+        const isPaused = config.enabled === false || config.collapsePaused === true;
+
         if (changeInfo.groupId === -1) {
-          if (!tab.active) {
+          if (!tab.active && !isPaused) {
             this.debounceRefreshTimers();
           }
         } else {
@@ -432,7 +642,7 @@ export class GroupManager {
             await this.openGroupForVisibility(changeInfo.groupId, tab.windowId);
           }
 
-          if (!tab.active && changeInfo.groupId !== this.activeGroupId && tab.windowId) {
+          if (!tab.active && changeInfo.groupId !== this.activeGroupId && tab.windowId && !isPaused) {
             const groupId = changeInfo.groupId;
             const windowId = tab.windowId;
 
@@ -451,16 +661,29 @@ export class GroupManager {
   }
 
   public handleTabRemoved(_tabId: number, _removeInfo: TabRemoveInfo): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
     this.debounceRefreshTimers();
   }
 
   public async handleTabGroupUpdated(group: BrowserTabGroup): Promise<void> {
     try {
       const groupId = group.id;
+      this.setGroupMetadata(groupId, {
+        title: group.title || '',
+        color: group.color || '',
+      });
 
       if (group.collapsed) {
         this.removeGroupTimer(groupId);
       } else {
+        const config = this.configManager.getConfig();
+        if (config.enabled === false || config.collapsePaused === true) {
+          return;
+        }
+
         if (groupId !== this.activeGroupId) {
           const groupTabs = await this.browserAdapter.queryTabs({ groupId });
           if (groupTabs.length > 0 && groupTabs[0].windowId) {
@@ -474,6 +697,10 @@ export class GroupManager {
   }
 
   public handleWindowFocusChanged(windowId: number): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
     if (windowId !== this.browserAdapter.WINDOW_ID_NONE) {
       this.debounceRefreshTimers();
     }

@@ -17,6 +17,12 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   public groups: Map<number, BrowserTabGroup> = new Map();
   public windows: Map<number, BrowserWindow> = new Map();
   public storage: Record<string, any> = {};
+  public grantedPermissions: Set<string> = new Set();
+  public badgeText = '';
+  public badgeColor = '';
+  public optionsPageOpened = false;
+  public currentIcon: any = null;
+  private nextGroupId = 100;
 
   private storageChangeListeners: Array<(changes: Record<string, StorageChange>) => void> = [];
   private tabActivatedListeners: Array<(activeInfo: TabActiveInfo) => void> = [];
@@ -27,6 +33,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   private windowFocusChangedListeners: Array<(windowId: number) => void> = [];
   private startupListeners: Array<() => void> = [];
   private installedListeners: Array<(details: InstalledDetails) => void> = [];
+  private commandListeners: Array<(command: string) => void> = [];
 
   // ==========================================================================
   // Tabs API
@@ -40,13 +47,72 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     return { ...tab };
   }
 
-  public async queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean }): Promise<BrowserTab[]> {
+  public async queryTabs(queryInfo: {
+    windowId?: number;
+    groupId?: number;
+    active?: boolean;
+    lastFocusedWindow?: boolean;
+  }): Promise<BrowserTab[]> {
+    let targetWindowId = queryInfo.windowId;
+    if (queryInfo.lastFocusedWindow) {
+      const focusedWindow = Array.from(this.windows.values()).find((w) => w.focused);
+      if (focusedWindow) {
+        targetWindowId = focusedWindow.id;
+      }
+    }
+
     return Array.from(this.tabs.values()).filter((tab) => {
-      if (queryInfo.windowId !== undefined && tab.windowId !== queryInfo.windowId) return false;
+      if (targetWindowId !== undefined && tab.windowId !== targetWindowId) return false;
       if (queryInfo.groupId !== undefined && tab.groupId !== queryInfo.groupId) return false;
       if (queryInfo.active !== undefined && tab.active !== queryInfo.active) return false;
       return true;
     });
+  }
+
+  public async groupTabs(options: {
+    tabIds: number[];
+    groupId?: number;
+    createProperties?: { windowId?: number };
+  }): Promise<number> {
+    for (const tabId of options.tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab?.pinned) {
+        throw new Error('Tabs cannot be grouped while pinned.');
+      }
+    }
+
+    let targetGroupId = options.groupId;
+    if (targetGroupId === undefined) {
+      targetGroupId = this.nextGroupId++;
+      const newGroup: BrowserTabGroup = {
+        id: targetGroupId,
+        collapsed: false,
+        windowId: options.createProperties?.windowId ?? 1,
+        title: '',
+        color: 'grey',
+      };
+      this.groups.set(targetGroupId, newGroup);
+    }
+
+    for (const tabId of options.tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab) {
+        tab.groupId = targetGroupId;
+        this.tabs.set(tabId, { ...tab });
+      }
+    }
+
+    return targetGroupId;
+  }
+
+  public async ungroupTabs(tabIds: number[]): Promise<void> {
+    for (const tabId of tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab) {
+        tab.groupId = -1;
+        this.tabs.set(tabId, { ...tab });
+      }
+    }
   }
 
   // ==========================================================================
@@ -70,7 +136,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
 
   public async updateTabGroup(
     groupId: number,
-    updateProperties: { collapsed?: boolean; title?: string }
+    updateProperties: { collapsed?: boolean; title?: string; color?: string }
   ): Promise<BrowserTabGroup> {
     const group = this.groups.get(groupId);
     if (!group) {
@@ -79,6 +145,43 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     const updated = { ...group, ...updateProperties };
     this.groups.set(groupId, updated);
     return { ...updated };
+  }
+
+  public async moveTabGroup(groupId: number, moveProperties: { index: number }): Promise<void> {
+    const group = this.groups.get(groupId);
+    if (!group) {
+      throw new Error(`Tab group ${groupId} not found`);
+    }
+    const winTabs = Array.from(this.tabs.values())
+      .filter((t) => (t.windowId ?? 1) === (group.windowId ?? 1))
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+    const groupTabs = winTabs.filter((t) => t.groupId === groupId);
+    const nonGroupTabs = winTabs.filter((t) => t.groupId !== groupId);
+
+    let targetIdx = moveProperties.index === -1 ? nonGroupTabs.length : moveProperties.index;
+    targetIdx = Math.max(0, Math.min(targetIdx, nonGroupTabs.length));
+
+    nonGroupTabs.splice(targetIdx, 0, ...groupTabs);
+    nonGroupTabs.forEach((t, idx) => {
+      t.index = idx;
+      this.tabs.set(t.id!, { ...t });
+    });
+  }
+
+  // ==========================================================================
+  // Permissions API
+  // ==========================================================================
+
+  public async requestPermission(permissions: string[]): Promise<boolean> {
+    for (const perm of permissions) {
+      this.grantedPermissions.add(perm);
+    }
+    return true;
+  }
+
+  public async hasPermission(permissions: string[]): Promise<boolean> {
+    return permissions.every((p) => this.grantedPermissions.has(p));
   }
 
   // ==========================================================================
@@ -153,9 +256,33 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     this.installedListeners.push(callback);
   }
 
+  public async setIcon(details: { path: string | Record<number, string> }): Promise<void> {
+    this.currentIcon = details.path;
+  }
+
+  public async setBadgeText(details: { text: string }): Promise<void> {
+    this.badgeText = details.text;
+  }
+
+  public async setBadgeBackgroundColor(details: { color: string }): Promise<void> {
+    this.badgeColor = details.color;
+  }
+
+  public onCommand(callback: (command: string) => void): void {
+    this.commandListeners.push(callback);
+  }
+
+  public async openOptionsPage(): Promise<void> {
+    this.optionsPageOpened = true;
+  }
+
   // ==========================================================================
   // Test Helpers
   // ==========================================================================
+
+  public triggerCommand(command: string): void {
+    this.commandListeners.forEach((l) => l(command));
+  }
 
   public triggerStorageChanged(changes: Record<string, StorageChange>): void {
     for (const [key, change] of Object.entries(changes)) {
