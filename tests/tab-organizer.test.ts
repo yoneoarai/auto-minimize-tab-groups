@@ -152,6 +152,37 @@ describe('TabOrganizer', () => {
       organizer.handleTabRemoved(20);
       expect(organizer.getManualOverrides().has(20)).toBe(false);
     });
+
+    it('clears manual overrides when organizeAllTabs is invoked', async () => {
+      organizer.handleTabUpdated(25, { groupId: 5 }, { id: 25, active: false });
+      expect(organizer.getManualOverrides().has(25)).toBe(true);
+
+      mockAdapter.tabs.set(25, { id: 25, windowId: 1, url: 'https://google.com', active: false });
+      await organizer.organizeAllTabs(1);
+
+      expect(organizer.getManualOverrides().has(25)).toBe(false);
+      const tab = await mockAdapter.getTab(25);
+      expect(tab.groupId).toBeDefined();
+    });
+
+    it('groups a new tab when navigating from chrome://newtab to matching URL', async () => {
+      // 1. Tab created at chrome://newtab
+      const initialTab = { id: 30, windowId: 1, url: 'chrome://newtab', active: true };
+      mockAdapter.tabs.set(30, initialTab);
+      await organizer.handleTabCreated(initialTab);
+      expect((await mockAdapter.getTab(30)).groupId ?? -1).toBe(-1);
+
+      // 2. User navigates to google.com (changeInfo contains url or tab contains url)
+      const navigatedTab = { id: 30, windowId: 1, url: 'https://google.com', active: true };
+      mockAdapter.tabs.set(30, navigatedTab);
+      await organizer.handleTabUpdated(30, { url: 'https://google.com' }, navigatedTab);
+
+      const result = await mockAdapter.getTab(30);
+      expect(result.groupId).toBeDefined();
+      expect(result.groupId).not.toBe(-1);
+      const group = await mockAdapter.getTabGroup(result.groupId!);
+      expect(group.title).toBe('Google');
+    });
   });
 
   describe('organizeAllTabs and groupOrdering', () => {

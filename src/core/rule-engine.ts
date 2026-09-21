@@ -87,32 +87,28 @@ export class RuleEngine {
     let hostPart = slashIndex === -1 ? pattern : pattern.slice(0, slashIndex);
     const pathPart = slashIndex === -1 ? '' : pattern.slice(slashIndex);
 
-    // Normalize www.
-    let allowWww = false;
-    if (hostPart.startsWith('www.')) {
-      hostPart = hostPart.slice(4);
-      allowWww = true;
-    } else if (!hostPart.startsWith('*.') && !hostPart.startsWith('*')) {
-      allowWww = true;
+    // Normalize leading wildcard *. or www.
+    let cleanHost = hostPart;
+    if (cleanHost.startsWith('*.')) {
+      cleanHost = cleanHost.slice(2);
+    }
+    if (cleanHost.startsWith('www.')) {
+      cleanHost = cleanHost.slice(4);
     }
 
     // Convert host part
     let hostRegex: string;
-    if (hostPart.startsWith('*.')) {
-      // Subdomain wildcard: e.g. *.google.com matches apex (google.com) and any subdomain (mail.google.com)
-      const domainWithoutWildcard = hostPart.slice(2);
-      const escapedDomain = escapeRegexExceptWildcard(domainWithoutWildcard).replace(/\*/g, '[^/:]*');
-      hostRegex = `(?:(?:[^/:]+\\.)+)?${escapedDomain}`;
-    } else {
+    if (hostPart.startsWith('*') && !hostPart.startsWith('*.')) {
+      // General prefix wildcard like *internal*
       hostRegex = escapeRegexExceptWildcard(hostPart).replace(/\*/g, '[^/:]*');
+    } else {
+      // Standard domain or wildcard domain (e.g. "google.com" or "*.google.com"):
+      // Matches apex domain, www., and all subdomains (e.g. mail.google.com) identically
+      const escapedDomain = escapeRegexExceptWildcard(cleanHost).replace(/\*/g, '[^/:]*');
+      hostRegex = `(?:[^/:]+\\.)*${escapedDomain}`;
     }
 
-    let fullHostRegex: string;
-    if (allowWww) {
-      fullHostRegex = `(?:www\\.)?${hostRegex}`;
-    } else {
-      fullHostRegex = hostRegex;
-    }
+    const fullHostRegex = hostRegex;
 
     // Optional port matching
     const portRegex = '(?::\\d+)?';

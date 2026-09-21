@@ -10,6 +10,7 @@ import { TabGroupColor } from '../types/rules';
 export class TabOrganizer {
   private manualOverrides: Set<number> = new Set();
   private pendingGroupAssignments: Set<number> = new Set();
+  private tabUrls: Map<number, string> = new Map();
 
   constructor(
     private browserAdapter: IBrowserAdapter,
@@ -71,6 +72,8 @@ export class TabOrganizer {
     if (/^(chrome|edge|about|chrome-extension|moz-extension):\/\//i.test(url)) {
       return;
     }
+
+    this.tabUrls.set(tab.id, url);
 
     const rules = this.configManager.getRules();
     const matchedRule = this.ruleEngine.matchUrl(url, rules);
@@ -143,6 +146,9 @@ export class TabOrganizer {
   public async organizeAllTabs(windowId?: number): Promise<void> {
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
+
+    // Reset manual overrides so tabs are not permanently locked when re-organizing
+    this.manualOverrides.clear();
 
     try {
       const windows = windowId
@@ -217,6 +223,10 @@ export class TabOrganizer {
   public handleTabCreated = async (tab: BrowserTab): Promise<void> => {
     if (tab.id) {
       this.manualOverrides.delete(tab.id);
+      const url = tab.url || tab.pendingUrl;
+      if (url) {
+        this.tabUrls.set(tab.id, url);
+      }
     }
     if (tab.pinned) {
       return;
@@ -242,18 +252,28 @@ export class TabOrganizer {
       return;
     }
 
-    // If navigation happened (new URL), clear manual override and re-organize
-    if (changeInfo.url) {
+    const currentUrl = changeInfo.url || tab.url || tab.pendingUrl;
+    const previousUrl = this.tabUrls.get(tabId);
+
+    // If navigation happened (new URL or URL changed), clear manual override and re-organize
+    const hasNavigated =
+      Boolean(changeInfo.url) ||
+      Boolean(currentUrl && previousUrl && currentUrl !== previousUrl);
+
+    if (hasNavigated) {
+      const newUrl = changeInfo.url || currentUrl!;
+      this.tabUrls.set(tabId, newUrl);
       this.manualOverrides.delete(tabId);
-      await this.organizeTab({ ...tab, url: changeInfo.url });
+      await this.organizeTab({ ...tab, url: newUrl });
       return;
     }
 
     // If tab's group changed without URL change, check if it was our own action or a user drag
     if (changeInfo.groupId !== undefined && !changeInfo.url) {
       if (changeInfo.groupId !== -1 && this.pendingGroupAssignments.has(tabId)) {
-        // This was our own programmatic grouping, not a user action
-        this.pendingGroupAssignments.delete(tabId);
+        // This was our own programmatic grouping, not a user action.
+        // DO NOT delete here: let the 1000ms timeout clean it up so subsequent
+        // onUpdated events for this grouping operation don't falsely trigger manualOverrides.
         return;
       }
       this.manualOverrides.add(tabId);
@@ -263,5 +283,7 @@ export class TabOrganizer {
 
   public handleTabRemoved = (tabId: number): void => {
     this.manualOverrides.delete(tabId);
+    this.tabUrls.delete(tabId);
+    this.pendingGroupAssignments.delete(tabId);
   };
 }

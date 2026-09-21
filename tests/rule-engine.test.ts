@@ -45,6 +45,12 @@ describe('RuleEngine', () => {
         expect(RuleEngine.testPattern(pattern, 'https://google.com:8080/foo')).toBe(true);
       });
 
+      it('matches subdomains identically to *.google.com', () => {
+        expect(RuleEngine.testPattern(pattern, 'https://mail.google.com')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://docs.google.com/document/d/123')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://drive.google.com')).toBe(true);
+      });
+
       it('does not match lookalike domains', () => {
         expect(RuleEngine.testPattern(pattern, 'https://notgoogle.com')).toBe(false);
         expect(RuleEngine.testPattern(pattern, 'https://google.com.attacker.com')).toBe(false);

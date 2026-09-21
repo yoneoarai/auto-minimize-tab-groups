@@ -11,9 +11,7 @@
   },
   "permissions": [
     "tabGroups",
-    "storage"
-  ],
-  "optional_permissions": [
+    "storage",
     "tabs"
   ],
   "options_ui": {
