@@ -58,7 +58,7 @@ export interface IBrowserAdapter {
 
   // Tabs
   getTab(tabId: number): Promise<BrowserTab>;
-  queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean }): Promise<BrowserTab[]>;
+  queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean; lastFocusedWindow?: boolean }): Promise<BrowserTab[]>;
 
   // Tab Groups
   getTabGroup(groupId: number): Promise<BrowserTabGroup>;
@@ -84,6 +84,12 @@ export interface IBrowserAdapter {
   getStorage(keys: string[]): Promise<Record<string, any>>;
   setStorage(items: Record<string, any>): Promise<void>;
   onStorageChanged(callback: (changes: Record<string, StorageChange>) => void): void;
+
+  // Action Badge & Commands
+  setBadgeText?(details: { text: string }): Promise<void>;
+  setBadgeBackgroundColor?(details: { color: string }): Promise<void>;
+  onCommand?(callback: (command: string) => void): void;
+  openOptionsPage?(): Promise<void>;
 
   // Event Listeners
   onTabActivated(callback: (activeInfo: TabActiveInfo) => void): void;

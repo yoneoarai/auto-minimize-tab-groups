@@ -32,5 +32,17 @@
       "48": "icons/icon-48.png"
     }
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "commands": {
+    "toggle-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
+      "description": "Toggle pause for tab group auto-collapsing"
+    }
+  },
   "homepage_url": "https://github.com/yoneoarai/auto-minimize-tab-groups"
 }

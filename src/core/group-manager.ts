@@ -356,8 +356,9 @@ export class GroupManager {
       if (!hasActiveTabs && groupTabs.length > 0) {
         const now = Date.now();
         if (groupState.justOpened && now - groupState.justOpened < JUST_OPENED_GRACE_PERIOD_MS) {
-          // Re-arm timer with remaining grace period
-          this.setGroupTimer(groupId, groupState.windowId);
+          const remainingGrace = JUST_OPENED_GRACE_PERIOD_MS - (now - groupState.justOpened);
+          delete groupState.justOpened;
+          this.setGroupTimer(groupId, groupState.windowId, Math.max(remainingGrace, 100));
           return;
         }
 
@@ -420,6 +421,15 @@ export class GroupManager {
       }
 
       const windows = await this.browserAdapter.getAllWindows({ populate: false });
+
+      // Recover activeGroupId from active tab in the currently focused window
+      try {
+        const activeTabs = await this.browserAdapter.queryTabs({ active: true, lastFocusedWindow: true });
+        const focusedActiveTab = activeTabs.find((t) => t.groupId && t.groupId > 0);
+        this.activeGroupId = focusedActiveTab?.groupId ?? null;
+      } catch {
+        // Non-fatal if query fails
+      }
 
       for (const window of windows) {
         if (!window.id) continue;

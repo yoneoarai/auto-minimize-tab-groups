@@ -18,6 +18,9 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   public windows: Map<number, BrowserWindow> = new Map();
   public storage: Record<string, any> = {};
   public grantedPermissions: Set<string> = new Set();
+  public badgeText = '';
+  public badgeColor = '';
+  public optionsPageOpened = false;
   private nextGroupId = 100;
 
   private storageChangeListeners: Array<(changes: Record<string, StorageChange>) => void> = [];
@@ -29,6 +32,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   private windowFocusChangedListeners: Array<(windowId: number) => void> = [];
   private startupListeners: Array<() => void> = [];
   private installedListeners: Array<(details: InstalledDetails) => void> = [];
+  private commandListeners: Array<(command: string) => void> = [];
 
   // ==========================================================================
   // Tabs API
@@ -42,9 +46,22 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     return { ...tab };
   }
 
-  public async queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean }): Promise<BrowserTab[]> {
+  public async queryTabs(queryInfo: {
+    windowId?: number;
+    groupId?: number;
+    active?: boolean;
+    lastFocusedWindow?: boolean;
+  }): Promise<BrowserTab[]> {
+    let targetWindowId = queryInfo.windowId;
+    if (queryInfo.lastFocusedWindow) {
+      const focusedWindow = Array.from(this.windows.values()).find((w) => w.focused);
+      if (focusedWindow) {
+        targetWindowId = focusedWindow.id;
+      }
+    }
+
     return Array.from(this.tabs.values()).filter((tab) => {
-      if (queryInfo.windowId !== undefined && tab.windowId !== queryInfo.windowId) return false;
+      if (targetWindowId !== undefined && tab.windowId !== targetWindowId) return false;
       if (queryInfo.groupId !== undefined && tab.groupId !== queryInfo.groupId) return false;
       if (queryInfo.active !== undefined && tab.active !== queryInfo.active) return false;
       return true;
@@ -224,9 +241,29 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     this.installedListeners.push(callback);
   }
 
+  public async setBadgeText(details: { text: string }): Promise<void> {
+    this.badgeText = details.text;
+  }
+
+  public async setBadgeBackgroundColor(details: { color: string }): Promise<void> {
+    this.badgeColor = details.color;
+  }
+
+  public onCommand(callback: (command: string) => void): void {
+    this.commandListeners.push(callback);
+  }
+
+  public async openOptionsPage(): Promise<void> {
+    this.optionsPageOpened = true;
+  }
+
   // ==========================================================================
   // Test Helpers
   // ==========================================================================
+
+  public triggerCommand(command: string): void {
+    this.commandListeners.forEach((l) => l(command));
+  }
 
   public triggerStorageChanged(changes: Record<string, StorageChange>): void {
     for (const [key, change] of Object.entries(changes)) {

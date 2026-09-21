@@ -15,6 +15,38 @@
         --border: #dadce0;
       }
 
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --primary: #8ab4f8;
+          --primary-hover: #aecbfa;
+          --text-primary: #e8eaed;
+          --text-secondary: #9aa0a6;
+          --bg: #202124;
+          --bg-subtle: #292a2d;
+          --border: #3c4043;
+        }
+
+        .btn {
+          background-color: #292a2d !important;
+          color: #8ab4f8 !important;
+          border-color: #3c4043 !important;
+        }
+
+        .btn:hover {
+          background-color: #35363a !important;
+        }
+
+        .slider {
+          background-color: #5f6368 !important;
+        }
+
+        .paused-badge {
+          background-color: #3c4043 !important;
+          color: #fdd663 !important;
+          border-color: #f9ab00 !important;
+        }
+      }
+
       * {
         box-sizing: border-box;
         margin: 0;
@@ -239,6 +271,10 @@
     </div>
 
     <button id="open-settings-btn" class="btn">⚙ Open Full Settings</button>
+
+    <div class="footer-note" style="text-align: center; margin-top: 10px; font-size: 11px; color: var(--text-secondary);">
+      Tabbi v1.0.0
+    </div>
 
     <script src="popup.js"></script>
   </body>

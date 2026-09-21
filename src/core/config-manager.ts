@@ -570,6 +570,15 @@ export class ConfigManager {
       }
     }
 
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Invalid configuration: Root must be an object.');
+    }
+
+    const obj = parsed as Record<string, any>;
+    if (obj.rules !== undefined && !Array.isArray(obj.rules)) {
+      throw new Error('Invalid configuration: "rules" must be an array.');
+    }
+
     this.currentConfig = this.normalizeConfig(parsed);
     await this.saveConfig();
   }

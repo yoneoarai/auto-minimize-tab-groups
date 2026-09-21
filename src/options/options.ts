@@ -49,7 +49,11 @@ function renderPatternTags(containerId: string, patterns: string[]): void {
   container.innerHTML = '';
 
   if (patterns.length === 0) {
-    container.innerHTML = '<span style="color: #9aa0a6; font-size: 12px;">No patterns added yet.</span>';
+    const emptySpan = document.createElement('span');
+    emptySpan.style.color = '#9aa0a6';
+    emptySpan.style.fontSize = '12px';
+    emptySpan.textContent = 'No patterns added yet.';
+    container.appendChild(emptySpan);
     return;
   }
 
@@ -60,7 +64,7 @@ function renderPatternTags(containerId: string, patterns: string[]): void {
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.innerHTML = '&times;';
+    removeBtn.textContent = '×';
     removeBtn.title = 'Remove pattern';
     removeBtn.addEventListener('click', () => {
       patterns.splice(index, 1);
@@ -162,10 +166,10 @@ function renderRulesList(): void {
         <div class="color-dot color-${rule.color}"></div>
         <div class="rule-info">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="rule-name">${rule.name}</span>
+            <span class="rule-name"></span>
             <span class="priority-badge ${index === 0 ? 'p1' : ''}">Priority ${priorityNum}</span>
           </div>
-          <span class="rule-patterns">${rule.patterns.join(', ')}</span>
+          <span class="rule-patterns"></span>
           <span class="rule-badge">${collapseBadge}</span>
         </div>
       </div>
@@ -174,6 +178,9 @@ function renderRulesList(): void {
         <button class="btn btn-danger btn-sm delete-rule-btn">Delete</button>
       </div>
     `;
+
+    item.querySelector('.rule-name')!.textContent = rule.name;
+    item.querySelector('.rule-patterns')!.textContent = rule.patterns.join(', ');
 
     // Drag and drop events
     item.addEventListener('dragstart', () => {
@@ -569,9 +576,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           const contents = event.target?.result as string;
           await configManager.importConfig(contents);
-          window.location.reload();
-        } catch {
-          alert('Failed to import configuration: Invalid JSON file.');
+          showToast('Configuration imported successfully!');
+          setTimeout(() => {
+            window.location.reload();
+          }, 400);
+        } catch (err: any) {
+          alert(`Failed to import configuration: ${err?.message || 'Invalid JSON file.'}`);
+          importInput.value = '';
         }
       };
       reader.readAsText(file);

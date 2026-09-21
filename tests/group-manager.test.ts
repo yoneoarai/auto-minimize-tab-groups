@@ -405,4 +405,101 @@ describe('GroupManager', () => {
       expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
     });
   });
+
+  describe('GroupManager Event Handlers', () => {
+    it('handleTabUpdated opens group for visibility and sets justOpened grace period when tab moves into group', async () => {
+      const groupId = 201;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: true, windowId: 1, title: 'Dev' });
+      mockAdapter.tabs.set(10, { id: 10, groupId: -1, windowId: 1, active: false });
+
+      await groupManager.handleTabUpdated(10, { groupId }, { id: 10, groupId, windowId: 1, active: false });
+
+      // Group was opened for visibility
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(false);
+
+      const state = groupManager.getGroupState(groupId);
+      expect(state).toBeDefined();
+      expect(state?.justOpened).toBeDefined();
+
+      // Grace period expires and arms collapse timer
+      await jest.advanceTimersByTimeAsync(NEW_TAB_GRACE_PERIOD_MS);
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+    });
+
+    it('handleTabGroupUpdated arms timer when user manually expands a group without active tabs', async () => {
+      const groupId = 202;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: true, windowId: 1, title: 'Work' });
+      mockAdapter.tabs.set(20, { id: 20, groupId, windowId: 1, active: false });
+
+      // User expands group
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1, title: 'Work' });
+      await groupManager.handleTabGroupUpdated({ id: groupId, collapsed: false, windowId: 1, title: 'Work' });
+
+      const state = groupManager.getGroupState(groupId);
+      expect(state).toBeDefined();
+      expect(state?.timer).not.toBeNull();
+
+      // Advancing time collapses it
+      await jest.advanceTimersByTimeAsync(30000);
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+    });
+
+    it('handleTabGroupUpdated clears timer when group is collapsed', async () => {
+      const groupId = 203;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1, title: 'Reading' });
+      mockAdapter.tabs.set(30, { id: 30, groupId, windowId: 1, active: false });
+
+      groupManager.setGroupTimer(groupId, 1);
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // User collapses group
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: true, windowId: 1, title: 'Reading' });
+      await groupManager.handleTabGroupUpdated({ id: groupId, collapsed: true, windowId: 1, title: 'Reading' });
+
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+    });
+
+    it('handleWindowFocusChanged reactivates timers and queries active tabs', async () => {
+      const groupId = 204;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1, title: 'Mail' });
+      mockAdapter.tabs.set(40, { id: 40, groupId, windowId: 1, active: true });
+
+      // Window 1 is focused, tab 40 is active
+      await groupManager.handleTabActivated({ tabId: 40, windowId: 1 });
+      expect(groupManager.getActiveGroupId()).toBe(groupId);
+
+      // Focus switches to window 2
+      mockAdapter.windows.set(1, { id: 1, focused: false });
+      mockAdapter.windows.set(2, { id: 2, focused: true });
+      mockAdapter.tabs.set(50, { id: 50, groupId: -1, windowId: 2, active: true });
+
+      groupManager.handleWindowFocusChanged(2);
+      await jest.advanceTimersByTimeAsync(DEBOUNCE_DELAY_MS);
+      await Promise.resolve();
+
+      // Window 1 group should now have a timer armed since focus left
+      const state = groupManager.getGroupState(groupId);
+      expect(state?.timer).not.toBeNull();
+    });
+
+    it('handleTabRemoved cleans up timers when group tabs are closed', async () => {
+      const groupId = 205;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(60, { id: 60, groupId, windowId: 1, active: false });
+
+      groupManager.setGroupTimer(groupId, 1);
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // In the browser, closing the last tab in a group destroys the tab group
+      mockAdapter.tabs.delete(60);
+      mockAdapter.groups.delete(groupId);
+      groupManager.handleTabRemoved(60, { windowId: 1, isWindowClosing: false });
+      await jest.advanceTimersByTimeAsync(DEBOUNCE_DELAY_MS);
+      await Promise.resolve();
+
+      // Group has no tabs left, should be cleaned up
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+    });
+  });
 });

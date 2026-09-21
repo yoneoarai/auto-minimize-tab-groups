@@ -19,6 +19,61 @@
       --radius: 8px;
     }
 
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #8ab4f8;
+        --primary-hover: #aecbfa;
+        --bg-color: #202124;
+        --card-bg: #292a2d;
+        --text-main: #e8eaed;
+        --text-secondary: #9aa0a6;
+        --border-color: #3c4043;
+        --danger-color: #f28b82;
+        --danger-hover: #f6aea9;
+        --success-color: #81c995;
+      }
+
+      .btn-secondary:hover {
+        background-color: #35363a !important;
+      }
+
+      .priority-badge {
+        background-color: #3c4043 !important;
+        color: #e8eaed !important;
+      }
+
+      .priority-badge.p1 {
+        background-color: #174ea6 !important;
+        color: #d2e3fc !important;
+      }
+
+      .rule-badge {
+        background-color: #3c4043 !important;
+        color: #9aa0a6 !important;
+      }
+
+      .pattern-tag {
+        background-color: #3c4043 !important;
+        color: #e8eaed !important;
+      }
+
+      .move-btn {
+        background-color: #35363a !important;
+        border-color: #3c4043 !important;
+        color: #e8eaed !important;
+      }
+
+      .move-btn:hover:not(:disabled) {
+        background-color: #444746 !important;
+      }
+
+      .empty-state {
+        background-color: #292a2d !important;
+        border-color: #3c4043 !important;
+        color: #9aa0a6 !important;
+      }
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -159,6 +214,8 @@
       border-radius: 4px;
       font-size: 14px;
       outline: none;
+      background-color: var(--card-bg);
+      color: var(--text-main);
       transition: border-color 0.2s;
     }
 
@@ -207,7 +264,7 @@
     }
 
     .btn-secondary {
-      background-color: #fff;
+      background-color: var(--card-bg);
       border-color: var(--border-color);
       color: var(--text-main);
     }
@@ -217,7 +274,7 @@
     }
 
     .btn-danger {
-      background-color: #fff;
+      background-color: var(--card-bg);
       border-color: var(--danger-color);
       color: var(--danger-color);
     }
@@ -287,7 +344,7 @@
     .color-red { background-color: #d93025; }
     .color-yellow { background-color: #f9ab00; }
     .color-green { background-color: #1e8e3e; }
-    .color-pink { background-color: #e37400; }
+    .color-pink { background-color: #d01884; }
     .color-purple { background-color: #9334e6; }
     .color-cyan { background-color: #007b83; }
     .color-orange { background-color: #e8710a; }
@@ -432,7 +489,8 @@
       width: 90%;
       max-width: 500px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-      background: #fff;
+      background: var(--card-bg);
+      color: var(--text-main);
     }
 
     dialog::backdrop {
@@ -682,6 +740,10 @@
         <button id="reset-all-btn" class="btn btn-danger btn-sm" style="margin-left: auto;">Reset All</button>
       </div>
     </div>
+
+    <footer style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border-color); text-align: center; font-size: 12px; color: var(--text-secondary);">
+      Tabbi — Tab Group Manager v1.0.0
+    </footer>
   </div>
 
   <!-- Rule Edit Modal Dialog -->
@@ -754,7 +816,7 @@
     </form>
   </dialog>
 
-  <div id="toast"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="options.js"></script>
 </body>

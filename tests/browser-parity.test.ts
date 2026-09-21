@@ -77,6 +77,15 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       expect(firefoxManifest.browser_specific_settings.gecko.id).toContain('@');
       expect(firefoxManifest.browser_specific_settings.gecko.strict_min_version).toBeDefined();
     });
+
+    it('has identical explicit content security policy and keyboard commands', () => {
+      expect(chromeManifest.content_security_policy).toEqual(firefoxManifest.content_security_policy);
+      expect(chromeManifest.content_security_policy?.extension_pages).toBe("script-src 'self'; object-src 'self'");
+
+      expect(chromeManifest.commands).toEqual(firefoxManifest.commands);
+      expect(chromeManifest.commands?.['toggle-pause']).toBeDefined();
+      expect(chromeManifest.commands['toggle-pause'].suggested_key?.default).toBe('Alt+Shift+P');
+    });
   });
 
   // ==========================================================================
@@ -160,6 +169,18 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       expect(optionsHtml).toContain('src="icon-large.svg"');
       expect(popupHtml).toContain('class="header-icon"');
       expect(popupHtml).toContain('src="icon-large.svg"');
+    });
+
+    it('options.html and popup.html both support native dark mode and version footers', () => {
+      expect(optionsHtml).toContain('@media (prefers-color-scheme: dark)');
+      expect(popupHtml).toContain('@media (prefers-color-scheme: dark)');
+      expect(optionsHtml).toContain('Tabbi — Tab Group Manager v1.0.0');
+      expect(popupHtml).toContain('Tabbi v1.0.0');
+    });
+
+    it('options.html defines accurate tab group color palette and accessible toast', () => {
+      expect(optionsHtml).toContain('.color-pink { background-color: #d01884; }');
+      expect(optionsHtml).toContain('<div id="toast" role="status" aria-live="polite"></div>');
     });
   });
 

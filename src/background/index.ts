@@ -14,6 +14,25 @@ const tabOrganizer = new TabOrganizer(browserAdapter, configManager, RuleEngine)
 let initialized = false;
 
 /**
+ * Updates toolbar action badge to reflect paused/disabled states.
+ */
+async function updateActionBadge(config = configManager.getConfig()): Promise<void> {
+  try {
+    if (!config.enabled) {
+      await browserAdapter.setBadgeText?.({ text: 'OFF' });
+      await browserAdapter.setBadgeBackgroundColor?.({ color: '#5f6368' });
+    } else if (config.collapsePaused) {
+      await browserAdapter.setBadgeText?.({ text: 'PAUSE' });
+      await browserAdapter.setBadgeBackgroundColor?.({ color: '#f9ab00' });
+    } else {
+      await browserAdapter.setBadgeText?.({ text: '' });
+    }
+  } catch {
+    // Non-fatal if badge cannot be updated
+  }
+}
+
+/**
  * Initializes the extension state by loading settings, organizing tabs, and setting up initial timers.
  */
 async function initialize(): Promise<void> {
@@ -22,6 +41,7 @@ async function initialize(): Promise<void> {
 
   try {
     const config = await configManager.loadConfig();
+    await updateActionBadge(config);
     if (config.enabled) {
       await tabOrganizer.organizeAllTabs();
     }
@@ -33,6 +53,7 @@ async function initialize(): Promise<void> {
 
 // React to config updates
 configManager.onConfigChanged((config) => {
+  updateActionBadge(config).catch(() => {});
   if (config.enabled) {
     if (config.reorganizeOnRuleChange) {
       tabOrganizer.organizeAllTabs().catch((err) => {
@@ -42,6 +63,14 @@ configManager.onConfigChanged((config) => {
     groupManager.refreshGroupTimers().catch((err) => {
       console.warn('Error refreshing timers on config change:', err);
     });
+  }
+});
+
+// Handle keyboard commands
+browserAdapter.onCommand?.(async (command) => {
+  if (command === 'toggle-pause') {
+    const isPaused = configManager.isCollapsePaused();
+    await configManager.setCollapsePaused(!isPaused);
   }
 });
 
@@ -80,6 +109,9 @@ browserAdapter.onStartup(() => {
 });
 
 browserAdapter.onInstalled((details) => {
+  if (details.reason === 'install') {
+    browserAdapter.openOptionsPage?.().catch(() => {});
+  }
   if (details.reason === 'install' || details.reason === 'update') {
     setTimeout(async () => {
       await initialize();

@@ -347,4 +347,43 @@ export class BrowserAdapter implements IBrowserAdapter {
     const runtimeApi = this.ensureApi('runtime');
     runtimeApi.onInstalled.addListener(callback);
   }
+
+  // ==========================================================================
+  // Action Badge & Commands
+  // ==========================================================================
+
+  public async setBadgeText(details: { text: string }): Promise<void> {
+    const actionApi = this.api?.action ?? this.api?.browserAction;
+    if (actionApi?.setBadgeText) {
+      const res = actionApi.setBadgeText(details);
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    }
+  }
+
+  public async setBadgeBackgroundColor(details: { color: string }): Promise<void> {
+    const actionApi = this.api?.action ?? this.api?.browserAction;
+    if (actionApi?.setBadgeBackgroundColor) {
+      const res = actionApi.setBadgeBackgroundColor(details);
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    }
+  }
+
+  public onCommand(callback: (command: string) => void): void {
+    if (this.api?.commands?.onCommand?.addListener) {
+      this.api.commands.onCommand.addListener(callback);
+    }
+  }
+
+  public async openOptionsPage(): Promise<void> {
+    if (this.api?.runtime?.openOptionsPage) {
+      const res = this.api.runtime.openOptionsPage();
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    }
+  }
 }
