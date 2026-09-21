@@ -18,14 +18,15 @@ A powerful cross-browser extension that automatically organizes your tabs into n
 - **Automated URL Grouping**: Define priority-ordered rules to automatically sort tabs into named, colored groups based on URL patterns.
 - **Per-Group Collapse Settings**: Customize collapse timeout per group or completely disable auto-minimization for specific groups (e.g. keep GitHub always open, collapse social media after 5s).
 - **Pause Auto-Collapse**: Temporarily pause auto-collapsing across all groups with a single click or keyboard shortcut (`Alt+Shift+P`), keeping all groups open while you work across them. Timers are suspended with zero idle CPU overhead.
-- **Toolbar Badges & Status Indicators**: Extension icon dynamically displays `PAUSE` (amber) when auto-collapse is paused or `OFF` (grey) when disabled.
+- **Toolbar Badges & Status Indicators**: Extension icon dynamically swaps to a dedicated paused icon when auto-collapse is paused or displays an `OFF` badge (grey) when disabled.
 - **Active Tab Protection**: Groups containing the currently active tab in the focused window are never minimized.
 - **Service Worker Resilience**: Bulletproof state recovery across Chrome MV3 service worker suspensions and wake-ups.
 - **Native Dark Mode**: Popup and settings interfaces seamlessly adapt to system/browser dark mode (`prefers-color-scheme: dark`).
 - **Manual Move Respect**: If you manually drag a tab to a different group, Tabbi respects your override until the tab navigates to a new URL.
-- **Unmatched Tabs Handling**: Choose to leave unmatched tabs as-is or gather them into a customizable "General" catch-all group.
-- **Configurable Group Ordering**: Arrange tab groups in your tab strip manually (drag-and-drop order in settings) or alphabetically.
-- **Full Settings UI & Pattern Tester**: Interactive options page with live pattern testing, rule reordering, and schema-validated JSON import/export.
+- **Catch-All Fallback Group**: Choose to leave unmatched tabs as-is or gather them into a customizable fallback group integrated directly into your rules list with full reordering and priority controls.
+- **Configurable Group Ordering**: Arrange tab groups in your tab strip manually (drag-and-drop order in settings) or alphabetically via an in-card toggle on the rules list. Newly created groups are instantly placed in their proper position.
+- **Forward-Compatible & Persistent**: Settings, rules, and customizations persist seamlessly across extension updates without risk of data loss.
+- **Full Settings UI & Pattern Tester**: Interactive options page with live pattern testing, drag-and-drop rule reordering, and schema-validated JSON import/export.
 - **Quick-Access Popup**: Toggle Tabbi on/off, pause collapsing, inspect live group stats, and jump to full settings.
 - **Multi-Window Support**: Seamlessly manages tab groups across multiple browser windows.
 
@@ -50,7 +51,7 @@ Tabbi's pattern matching engine supports flexible domain, subdomain, wildcard, a
 - **Protocol Agnostic**: Protocols (`http://` and `https://`) are handled automatically unless explicitly specified.
 - **WWW & Subdomain Normalization**: `domain.com` automatically matches `www.domain.com` and its subdomains.
 - **Security Boundaries**: Exact domain boundaries are enforced to prevent lookalike domains (e.g. `google.com.attacker.com` will never match `google.com`).
-- **First Match Wins**: Rules are evaluated in the priority order configured in settings. Use drag-and-drop or ▲/▼ controls to reorder.
+- **First Match Wins**: Rules are evaluated according to each rule's numeric Priority (1 = highest precedence). Tab strip positions can be arranged independently via drag-and-drop reordering.
 
 ---
 
@@ -145,7 +146,7 @@ The project follows a clean decoupled Ports & Adapters architecture:
 
 ## Development & Testing
 
-Tabbi includes a comprehensive 127-test suite with over 80% line coverage and a cross-browser parity verification suite ensuring 100% markup, functional, and manifest parity between Chrome and Firefox:
+Tabbi includes a comprehensive 146-test suite with over 85% line coverage and a cross-browser parity verification suite ensuring 100% markup, functional, and manifest parity between Chrome and Firefox:
 
 ```bash
 # Run all unit and parity tests
