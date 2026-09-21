@@ -35,10 +35,14 @@ async function refreshDisplay(): Promise<void> {
 
   const timeoutEl = document.getElementById('stat-timeout');
   if (timeoutEl) {
+    timeoutEl.textContent = `${configManager.getTimeoutSeconds()}s`;
     if (isPaused) {
-      timeoutEl.innerHTML = `${configManager.getTimeoutSeconds()}s <span class="paused-badge">Paused</span>`;
-    } else {
-      timeoutEl.textContent = `${configManager.getTimeoutSeconds()}s`;
+      const space = document.createTextNode(' ');
+      const badge = document.createElement('span');
+      badge.className = 'paused-badge';
+      badge.textContent = 'Paused';
+      timeoutEl.appendChild(space);
+      timeoutEl.appendChild(badge);
     }
   }
 

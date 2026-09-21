@@ -28,7 +28,7 @@ function renderColorPicker(
 ): void {
   const container = document.getElementById(containerId);
   if (!container) return;
-  container.innerHTML = '';
+  container.replaceChildren();
 
   TAB_GROUP_COLORS.forEach((color) => {
     const choice = document.createElement('div');
@@ -46,7 +46,7 @@ function renderColorPicker(
 function renderPatternTags(containerId: string, patterns: string[]): void {
   const container = document.getElementById(containerId);
   if (!container) return;
-  container.innerHTML = '';
+  container.replaceChildren();
 
   if (patterns.length === 0) {
     const emptySpan = document.createElement('span');
@@ -149,16 +149,15 @@ function updatePriorityStateForFallback(isFallback: boolean, evaluateLast: boole
 function renderRulesList(): void {
   const container = document.getElementById('rules-container');
   if (!container) return;
-  container.innerHTML = '';
+  container.replaceChildren();
 
   const rules = configManager.getRules();
 
   if (rules.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        No rules configured yet. Click "+ Add Rule" to create your first tab group rule!
-      </div>
-    `;
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+    emptyState.textContent = 'No rules configured yet. Click "+ Add Rule" to create your first tab group rule!';
+    container.appendChild(emptyState);
     return;
   }
 
@@ -180,50 +179,93 @@ function renderRulesList(): void {
     const priorityNum = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? index) + 1;
     const isFallback = Boolean(rule.isFallback);
 
-    let priorityBadgeHtml = '';
+    const ruleLeft = document.createElement('div');
+    ruleLeft.className = 'rule-left';
+
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'drag-handle';
+    dragHandle.title = 'Drag to reorder tab strip position';
+    dragHandle.textContent = '⋮⋮';
+    ruleLeft.appendChild(dragHandle);
+
+    const colorDot = document.createElement('div');
+    colorDot.className = `color-dot color-${rule.color}`;
+    ruleLeft.appendChild(colorDot);
+
+    const ruleInfo = document.createElement('div');
+    ruleInfo.className = 'rule-info';
+
+    const titleRow = document.createElement('div');
+    titleRow.style.display = 'flex';
+    titleRow.style.alignItems = 'center';
+    titleRow.style.gap = '8px';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'rule-name';
+    nameSpan.textContent = rule.name;
+    titleRow.appendChild(nameSpan);
+
     if (isFallback) {
-      if (rule.evaluateLast !== false) {
-        priorityBadgeHtml = `<span class="priority-badge" title="Evaluated last after all other rules">Priority: Last</span>`;
-      } else {
-        priorityBadgeHtml = `<span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>`;
-      }
-    } else {
-      priorityBadgeHtml = `<span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>`;
+      const fallbackBadge = document.createElement('span');
+      fallbackBadge.className = 'fallback-badge';
+      fallbackBadge.textContent = 'Fallback';
+      titleRow.appendChild(fallbackBadge);
     }
 
-    const fallbackBadgeHtml = isFallback
-      ? `<span class="fallback-badge">Fallback</span>`
-      : '';
+    const priorityBadge = document.createElement('span');
+    if (isFallback) {
+      if (rule.evaluateLast !== false) {
+        priorityBadge.className = 'priority-badge';
+        priorityBadge.title = 'Evaluated last after all other rules';
+        priorityBadge.textContent = 'Priority: Last';
+      } else {
+        priorityBadge.className = `priority-badge ${priorityNum === 1 ? 'p1' : ''}`;
+        priorityBadge.title = `Evaluation Priority ${priorityNum}`;
+        priorityBadge.textContent = `Priority ${priorityNum}`;
+      }
+    } else {
+      priorityBadge.className = `priority-badge ${priorityNum === 1 ? 'p1' : ''}`;
+      priorityBadge.title = `Evaluation Priority ${priorityNum}`;
+      priorityBadge.textContent = `Priority ${priorityNum}`;
+    }
+    titleRow.appendChild(priorityBadge);
+    ruleInfo.appendChild(titleRow);
 
-    const patternsText = isFallback
-      ? 'Matches all unmatched tabs'
-      : rule.patterns.join(', ');
+    const patternsSpan = document.createElement('span');
+    patternsSpan.className = 'rule-patterns';
+    if (isFallback) {
+      patternsSpan.style.fontStyle = 'italic';
+      patternsSpan.style.color = 'var(--text-secondary)';
+      patternsSpan.textContent = 'Matches all unmatched tabs';
+    } else {
+      patternsSpan.textContent = rule.patterns.join(', ');
+    }
+    ruleInfo.appendChild(patternsSpan);
 
-    const deleteBtnHtml = isFallback
-      ? ''
-      : `<button class="btn btn-danger btn-sm delete-rule-btn">Delete</button>`;
+    const collapseSpan = document.createElement('span');
+    collapseSpan.className = 'rule-badge';
+    collapseSpan.textContent = collapseBadge;
+    ruleInfo.appendChild(collapseSpan);
 
-    item.innerHTML = `
-      <div class="rule-left">
-        <span class="drag-handle" title="Drag to reorder tab strip position">⋮⋮</span>
-        <div class="color-dot color-${rule.color}"></div>
-        <div class="rule-info">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="rule-name"></span>
-            ${fallbackBadgeHtml}
-            ${priorityBadgeHtml}
-          </div>
-          <span class="rule-patterns" style="${isFallback ? 'font-style: italic; color: var(--text-secondary);' : ''}">${patternsText}</span>
-          <span class="rule-badge">${collapseBadge}</span>
-        </div>
-      </div>
-      <div class="rule-actions">
-        <button class="btn btn-secondary btn-sm edit-rule-btn">Edit</button>
-        ${deleteBtnHtml}
-      </div>
-    `;
+    ruleLeft.appendChild(ruleInfo);
+    item.appendChild(ruleLeft);
 
-    item.querySelector('.rule-name')!.textContent = rule.name;
+    const ruleActions = document.createElement('div');
+    ruleActions.className = 'rule-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-secondary btn-sm edit-rule-btn';
+    editBtn.textContent = 'Edit';
+    ruleActions.appendChild(editBtn);
+
+    if (!isFallback) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn btn-danger btn-sm delete-rule-btn';
+      deleteBtn.textContent = 'Delete';
+      ruleActions.appendChild(deleteBtn);
+    }
+
+    item.appendChild(ruleActions);
 
     // Drag and drop events
     item.addEventListener('dragstart', () => {
