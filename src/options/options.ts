@@ -540,18 +540,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 4. Group Ordering
   const orderingManual = document.getElementById('ordering-manual') as HTMLInputElement;
   const orderingAlpha = document.getElementById('ordering-alphabetical') as HTMLInputElement;
+  const orderingHint = document.getElementById('ordering-hint');
+
+  const updateOrderingHint = (isAlpha: boolean) => {
+    if (orderingHint) {
+      orderingHint.textContent = isAlpha
+        ? 'Alphabetical: tab groups in browser will be sorted A-Z'
+        : 'Manual: drag & drop or ▲/▼ to arrange tab groups';
+    }
+  };
+
   if (orderingManual && orderingAlpha) {
     if (config.groupOrdering === 'alphabetical') {
       orderingAlpha.checked = true;
+      updateOrderingHint(true);
     } else {
       orderingManual.checked = true;
+      updateOrderingHint(false);
     }
 
     document.querySelectorAll('input[name="group-ordering"]').forEach((r) => {
       r.addEventListener('change', async () => {
         const mode = orderingAlpha.checked ? 'alphabetical' : 'manual';
+        updateOrderingHint(orderingAlpha.checked);
         await configManager.setGroupOrdering(mode);
-        showToast('Group ordering updated');
+        showToast(`Group ordering set to ${mode}`);
       });
     });
   }

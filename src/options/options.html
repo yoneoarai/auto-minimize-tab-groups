@@ -58,6 +58,21 @@
         color: #9aa0a6 !important;
       }
 
+      .rules-card-toolbar {
+        background-color: #202124 !important;
+        border-color: #3c4043 !important;
+      }
+
+      .segmented-control {
+        background-color: #292a2d !important;
+      }
+
+      .segmented-control input[type="radio"]:checked + label {
+        background-color: #3c4043 !important;
+        color: #8ab4f8 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+      }
+
       .pattern-tag {
         background-color: #3c4043 !important;
         color: #e8eaed !important;
@@ -424,6 +439,79 @@
       border: 1px solid var(--border-color);
     }
 
+    .rules-card-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      margin-bottom: 12px;
+      padding: 6px 12px;
+      background: #f8f9fa;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .ordering-toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ordering-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+
+    .ordering-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .segmented-control {
+      display: inline-flex;
+      background: #e8eaed;
+      padding: 2px;
+      border-radius: 6px;
+      gap: 2px;
+    }
+
+    .segmented-control input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+
+    .segmented-control label {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      margin-bottom: 0;
+    }
+
+    .segmented-control input[type="radio"]:checked + label {
+      background: #fff;
+      color: var(--primary, #1a73e8);
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    .segmented-control input[type="radio"]:focus-visible + label {
+      outline: 2px solid var(--primary, #1a73e8);
+      outline-offset: 1px;
+    }
+
     .priority-controls {
       display: flex;
       flex-direction: column;
@@ -662,12 +750,25 @@
 
     <!-- Group Rules Card -->
     <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
         <div>
           <div class="card-title">Group Rules</div>
-          <div class="card-subtitle" style="margin-bottom: 0;">Tabs matching these patterns will be automatically organized into groups. Evaluated by Priority (1 = Highest, first match wins). Reorder via drag & drop or ▲/▼ to arrange tab groups from left to right in the browser.</div>
+          <div class="card-subtitle" style="margin-bottom: 0;">Tabs matching these patterns will be automatically organized into groups. Evaluated by Priority (1 = Highest, first match wins).</div>
         </div>
         <button id="add-rule-btn" class="btn btn-primary btn-sm">+ Add Rule</button>
+      </div>
+
+      <div class="rules-card-toolbar">
+        <div class="ordering-toggle-wrapper">
+          <span class="ordering-label">Tab Strip Order:</span>
+          <div class="segmented-control" role="radiogroup" aria-label="Tab Strip Ordering Mode">
+            <input type="radio" name="group-ordering" value="manual" id="ordering-manual" checked>
+            <label for="ordering-manual" title="Arrange tab groups manually via drag & drop or position number">Manual</label>
+            <input type="radio" name="group-ordering" value="alphabetical" id="ordering-alphabetical">
+            <label for="ordering-alphabetical" title="Sort tab groups alphabetically A-Z by name">Alphabetical</label>
+          </div>
+        </div>
+        <span class="ordering-hint" id="ordering-hint">Manual: drag & drop or ▲/▼ to arrange tab groups</span>
       </div>
 
       <div id="rules-container" class="rules-list">
@@ -721,22 +822,6 @@
             </label>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Group Ordering Card -->
-    <div class="card">
-      <div class="card-title">Group Ordering</div>
-      <div class="card-subtitle">How should groups be arranged in your tab strip?</div>
-      <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="group-ordering" value="manual" id="ordering-manual" checked>
-          <span>Manual (follows the order of rules configured above)</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="group-ordering" value="alphabetical" id="ordering-alphabetical">
-          <span>Alphabetical (sort groups A-Z by name)</span>
-        </label>
       </div>
     </div>
 
