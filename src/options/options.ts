@@ -201,6 +201,20 @@ function renderRulesList(): void {
 
     container.appendChild(item);
   });
+
+  // Container-level drop listener ensures drops in margins/padding are persisted
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+
+  container.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const updatedIds = Array.from(container.querySelectorAll('.rule-item')).map(
+      (el) => (el as HTMLElement).dataset.id!
+    );
+    await configManager.reorderRules(updatedIds);
+    showToast('Rules reordered');
+  });
 }
 
 function openRuleDialog(rule?: GroupRule): void {
@@ -240,6 +254,9 @@ function openRuleDialog(rule?: GroupRule): void {
     nameInput.value = '';
     currentModalColor = 'blue';
     currentModalPatterns = [];
+    if (customTimeoutInput) {
+      customTimeoutInput.value = '5';
+    }
     (document.querySelector('input[name="rule-collapse"][value="default"]') as HTMLInputElement).checked = true;
   }
 
@@ -254,6 +271,37 @@ function openRuleDialog(rule?: GroupRule): void {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const config = await configManager.loadConfig();
+
+  // Permission Warning Banner check
+  const permBanner = document.getElementById('permission-banner');
+  const grantPermBtn = document.getElementById('grant-permission-btn');
+  const updatePermissionBanner = async () => {
+    try {
+      if (browserAdapter.hasPermission) {
+        const hasPerm = await browserAdapter.hasPermission(['tabs']);
+        if (permBanner) {
+          permBanner.style.display = hasPerm ? 'none' : 'block';
+        }
+      }
+    } catch {
+      if (permBanner) permBanner.style.display = 'none';
+    }
+  };
+  await updatePermissionBanner();
+
+  grantPermBtn?.addEventListener('click', async () => {
+    try {
+      if (browserAdapter.requestPermission) {
+        const granted = await browserAdapter.requestPermission(['tabs']);
+        if (granted) {
+          showToast('Tabs permission granted');
+          await updatePermissionBanner();
+        }
+      }
+    } catch (e) {
+      console.warn('Could not request permission:', e);
+    }
+  });
 
   // 1. Global Enable Toggle
   const globalToggle = document.getElementById('global-enable-toggle') as HTMLInputElement;
@@ -289,7 +337,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const updateGeneralVisibility = () => {
     if (generalSettingsDiv) {
-      generalSettingsDiv.style.display = unmatchedGeneral.checked ? 'block' : 'none';
+      if (unmatchedGeneral.checked) {
+        generalSettingsDiv.style.opacity = '1';
+        generalSettingsDiv.style.pointerEvents = 'auto';
+      } else {
+        generalSettingsDiv.style.opacity = '0.45';
+        generalSettingsDiv.style.pointerEvents = 'none';
+      }
     }
   };
 
@@ -315,22 +369,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     generalNameInput.value = config.generalGroup?.name || 'General';
     generalNameInput.addEventListener('change', async () => {
       const name = generalNameInput.value.trim() || 'General';
+      const currentGen = configManager.getConfig().generalGroup || {
+        name: 'General',
+        color: 'grey',
+        collapse: { enabled: true, timeoutMs: null },
+      };
       await configManager.setGeneralGroup({
+        ...currentGen,
         name,
-        color: config.generalGroup?.color || 'grey',
-        collapse: config.generalGroup?.collapse || { enabled: true, timeoutMs: null },
       });
       showToast('General group updated');
     });
   }
 
   renderColorPicker('general-group-colors', config.generalGroup?.color || 'grey', async (color) => {
+    const currentGen = configManager.getConfig().generalGroup || {
+      name: 'General',
+      color: 'grey',
+      collapse: { enabled: true, timeoutMs: null },
+    };
     await configManager.setGeneralGroup({
-      name: config.generalGroup?.name || 'General',
+      ...currentGen,
       color,
-      collapse: config.generalGroup?.collapse || { enabled: true, timeoutMs: null },
     });
     showToast('General group color updated');
+  });
+
+  // Wire up general collapse radios
+  const currentGeneral = configManager.getConfig().generalGroup;
+  const generalCollapseRadios = document.querySelectorAll(
+    'input[name="general-collapse"]'
+  ) as NodeListOf<HTMLInputElement>;
+  generalCollapseRadios.forEach((r) => {
+    if (currentGeneral?.collapse?.enabled === false && r.value === 'disabled') {
+      r.checked = true;
+    } else if (currentGeneral?.collapse?.enabled !== false && r.value === 'default') {
+      r.checked = true;
+    }
+    r.addEventListener('change', async () => {
+      const currentGen = configManager.getConfig().generalGroup || {
+        name: 'General',
+        color: 'grey',
+        collapse: { enabled: true, timeoutMs: null },
+      };
+      await configManager.setGeneralGroup({
+        ...currentGen,
+        collapse: {
+          enabled: r.value !== 'disabled',
+          timeoutMs: null,
+        },
+      });
+      showToast('General group collapse updated');
+    });
   });
 
   // 4. Group Ordering
@@ -410,15 +500,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const addRuleBtn = document.getElementById('add-rule-btn');
   if (addRuleBtn) {
     addRuleBtn.addEventListener('click', async () => {
-      // Check for 'tabs' permission
-      if (browserAdapter.hasPermission && browserAdapter.requestPermission) {
-        const hasPerm = await browserAdapter.hasPermission(['tabs']);
-        if (!hasPerm) {
-          const granted = await browserAdapter.requestPermission(['tabs']);
-          if (!granted) {
-            alert('Notice: Tabbi requires the "tabs" permission to read URLs and organize tabs into groups.');
+      // Check for 'tabs' permission safely
+      try {
+        if (browserAdapter.hasPermission && browserAdapter.requestPermission) {
+          const hasPerm = await browserAdapter.hasPermission(['tabs']);
+          if (!hasPerm) {
+            const granted = await browserAdapter.requestPermission(['tabs']);
+            if (!granted) {
+              alert('Notice: Tabbi requires the "tabs" permission to read URLs and organize tabs into groups.');
+            }
           }
         }
+      } catch (err) {
+        console.warn('Could not check or request tabs permission:', err);
       }
       openRuleDialog();
     });
@@ -453,6 +547,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderPatternTags('patterns-tags', currentModalPatterns);
       patternInput.value = '';
       updateTesterResult();
+    } else {
+      showToast(`Pattern "${raw}" is already added.`);
+      patternInput.value = '';
     }
   };
 
@@ -466,9 +563,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   testerInput?.addEventListener('input', updateTesterResult);
 
+  // Prevent Enter key in name or timeout from prematurely submitting form
+  ruleForm?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLElement;
+      if (target.id === 'pattern-input') {
+        return; // Handled by patternInput keydown
+      }
+      if (target.tagName === 'INPUT') {
+        e.preventDefault();
+      }
+    }
+  });
+
   // Form submit
   ruleForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Auto-add any pending pattern typed in the pattern input box
+    if (patternInput && patternInput.value.trim()) {
+      addCurrentPattern();
+    }
+
     const nameInput = document.getElementById('rule-name-input') as HTMLInputElement;
     const name = nameInput.value.trim();
     if (!name) {
@@ -517,6 +633,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderRulesList();
     } catch (err: any) {
       alert(err.message || 'Error saving rule');
+    }
+  });
+
+  // Listen for config changes from popup or background
+  configManager.onConfigChanged((updatedConfig) => {
+    renderRulesList();
+    if (globalToggle) {
+      globalToggle.checked = updatedConfig.enabled ?? true;
+    }
+    if (defaultTimeoutInput && document.activeElement !== defaultTimeoutInput) {
+      defaultTimeoutInput.value = String(configManager.getTimeoutSeconds());
     }
   });
 

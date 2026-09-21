@@ -200,6 +200,12 @@ export class GroupManager {
       return;
     }
 
+    // Active groups should never have a collapse timer armed
+    if (groupId === this.activeGroupId) {
+      this.clearGroupTimer(groupId);
+      return;
+    }
+
     const existingState = this.groupTimers.get(groupId);
     if (existingState?.timer) {
       clearTimeout(existingState.timer);
@@ -237,7 +243,7 @@ export class GroupManager {
         .then((settings) => {
           if (!settings.enabled) {
             this.removeGroupTimer(groupId);
-          } else if (settings.timeoutMs !== timeoutDelay) {
+          } else if (settings.timeoutMs !== timeoutDelay && groupId !== this.activeGroupId) {
             this.setGroupTimer(groupId, windowId, settings.timeoutMs);
           }
         })
@@ -335,7 +341,7 @@ export class GroupManager {
       }
 
       const groupState = this.groupTimers.get(groupId);
-      if (!groupState || groupState.isActive) {
+      if (!groupState || groupState.isActive || groupId === this.activeGroupId) {
         return;
       }
 
@@ -416,12 +422,17 @@ export class GroupManager {
 
             const groupId = group.id;
             const isActiveGroup = groupId === this.activeGroupId;
+            const existing = this.groupTimers.get(groupId);
 
             if (isActiveGroup) {
               this.clearGroupTimer(groupId);
               this.setGroupActive(groupId, true, window.id);
             } else {
-              this.setGroupTimer(groupId, window.id);
+              // Only start a timer if one is not already running, preventing timer resets
+              // during unrelated events (e.g. tabs opening/closing in other groups)
+              if (!existing?.timer) {
+                this.setGroupTimer(groupId, window.id);
+              }
               this.setGroupActive(groupId, false, window.id);
             }
           }
@@ -499,10 +510,10 @@ export class GroupManager {
           await this.reactivateTimerForGroup(previousActiveGroupId);
         }
       } else {
+        this.activeGroupId = null;
         if (previousActiveGroupId) {
           await this.reactivateTimerForGroup(previousActiveGroupId);
         }
-        this.activeGroupId = null;
       }
     } catch (error) {
       console.warn('Failed to handle tab activation:', error);

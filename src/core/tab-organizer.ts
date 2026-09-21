@@ -9,6 +9,7 @@ import { TabGroupColor } from '../types/rules';
  */
 export class TabOrganizer {
   private manualOverrides: Set<number> = new Set();
+  private pendingGroupAssignments: Set<number> = new Set();
 
   constructor(
     private browserAdapter: IBrowserAdapter,
@@ -36,6 +37,9 @@ export class TabOrganizer {
   public async organizeTab(tab: BrowserTab): Promise<void> {
     if (!tab.id) return;
 
+    // Pinned tabs must never be organized into groups
+    if (tab.pinned) return;
+
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
 
@@ -45,15 +49,22 @@ export class TabOrganizer {
     }
 
     let url = tab.url || tab.pendingUrl;
-    if (!url) {
+    let pinned: boolean | undefined = tab.pinned;
+    if (!url || pinned === undefined) {
       try {
         const fullTab = await this.browserAdapter.getTab(tab.id);
-        url = fullTab.url || fullTab.pendingUrl;
+        if (!url) {
+          url = fullTab.url || fullTab.pendingUrl;
+        }
+        if (pinned === undefined) {
+          pinned = fullTab.pinned;
+        }
       } catch {
         return;
       }
     }
 
+    if (pinned) return;
     if (!url) return;
 
     // Skip internal browser schemes (e.g. chrome://, about:, extensions)
@@ -94,25 +105,35 @@ export class TabOrganizer {
 
     if (targetGroup) {
       if (tab.groupId !== targetGroup.id) {
-        await this.browserAdapter.groupTabs({
-          tabIds: [tab.id],
-          groupId: targetGroup.id,
-        });
+        this.pendingGroupAssignments.add(tab.id!);
+        try {
+          await this.browserAdapter.groupTabs({
+            tabIds: [tab.id!],
+            groupId: targetGroup.id,
+          });
+        } finally {
+          setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 200);
+        }
       }
       return targetGroup.id;
     } else {
       // Create new group in window
-      const newGroupId = await this.browserAdapter.groupTabs({
-        tabIds: [tab.id],
-        createProperties: windowId ? { windowId } : undefined,
-      });
+      this.pendingGroupAssignments.add(tab.id!);
+      try {
+        const newGroupId = await this.browserAdapter.groupTabs({
+          tabIds: [tab.id!],
+          createProperties: windowId ? { windowId } : undefined,
+        });
 
-      await this.browserAdapter.updateTabGroup(newGroupId, {
-        title: name,
-        color,
-      });
+        await this.browserAdapter.updateTabGroup(newGroupId, {
+          title: name,
+          color,
+        });
 
-      return newGroupId;
+        return newGroupId;
+      } finally {
+        setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 200);
+      }
     }
   }
 
@@ -132,7 +153,9 @@ export class TabOrganizer {
         if (!win.id) continue;
         const tabs = await this.browserAdapter.queryTabs({ windowId: win.id });
         for (const tab of tabs) {
-          await this.organizeTab(tab);
+          if (!tab.pinned) {
+            await this.organizeTab(tab);
+          }
         }
         await this.orderGroups(win.id);
       }
@@ -174,6 +197,10 @@ export class TabOrganizer {
         });
       }
 
+      // Check if already in order to avoid unnecessary browser layout thrashing
+      const alreadyInOrder = groups.every((g, i) => g.id === sortedGroups[i].id);
+      if (alreadyInOrder) return;
+
       // Reposition groups in order
       for (const group of sortedGroups) {
         await this.browserAdapter.moveTabGroup(group.id, { index: -1 });
@@ -191,6 +218,9 @@ export class TabOrganizer {
     if (tab.id) {
       this.manualOverrides.delete(tab.id);
     }
+    if (tab.pinned) {
+      return;
+    }
     await this.organizeTab(tab);
   };
 
@@ -199,6 +229,19 @@ export class TabOrganizer {
     changeInfo: TabChangeInfo,
     tab: BrowserTab
   ): Promise<void> => {
+    // If tab is pinned or was just pinned, never group it
+    if (tab.pinned || changeInfo.pinned === true) {
+      this.manualOverrides.delete(tabId);
+      return;
+    }
+
+    // If tab was unpinned, evaluate for grouping
+    if (changeInfo.pinned === false) {
+      this.manualOverrides.delete(tabId);
+      await this.organizeTab({ ...tab, pinned: false });
+      return;
+    }
+
     // If navigation happened (new URL), clear manual override and re-organize
     if (changeInfo.url) {
       this.manualOverrides.delete(tabId);
@@ -206,8 +249,13 @@ export class TabOrganizer {
       return;
     }
 
-    // If tab's group changed without URL change, user manually dragged or ungrouped the tab
+    // If tab's group changed without URL change, check if it was our own action or a user drag
     if (changeInfo.groupId !== undefined && !changeInfo.url) {
+      if (changeInfo.groupId !== -1 && this.pendingGroupAssignments.has(tabId)) {
+        // This was our own programmatic grouping, not a user action
+        this.pendingGroupAssignments.delete(tabId);
+        return;
+      }
       this.manualOverrides.add(tabId);
       return;
     }

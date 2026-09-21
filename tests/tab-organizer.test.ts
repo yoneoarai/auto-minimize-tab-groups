@@ -186,4 +186,58 @@ describe('TabOrganizer', () => {
       expect((await mockAdapter.getTab(40)).groupId ?? -1).toBe(-1);
     });
   });
+
+  describe('Pinned tabs', () => {
+    it('does not group pinned tabs during organizeTab', async () => {
+      const tab = { id: 50, windowId: 1, url: 'https://github.com/myrepo', active: false, pinned: true };
+      mockAdapter.tabs.set(50, tab);
+
+      await organizer.organizeTab(tab);
+
+      const tabResult = await mockAdapter.getTab(50);
+      expect(tabResult.groupId ?? -1).toBe(-1);
+    });
+
+    it('skips pinned tabs during organizeAllTabs', async () => {
+      mockAdapter.tabs.set(51, { id: 51, windowId: 1, url: 'https://github.com/myrepo', active: false, pinned: true });
+      mockAdapter.tabs.set(52, { id: 52, windowId: 1, url: 'https://github.com/myrepo', active: false, pinned: false });
+
+      await organizer.organizeAllTabs(1);
+
+      const tab51 = await mockAdapter.getTab(51);
+      const tab52 = await mockAdapter.getTab(52);
+
+      expect(tab51.groupId ?? -1).toBe(-1);
+      expect(tab52.groupId).toBeDefined();
+      expect(tab52.groupId).not.toBe(-1);
+    });
+
+    it('ignores pinned tabs in handleTabCreated', async () => {
+      const tab = { id: 53, windowId: 1, url: 'https://google.com', active: false, pinned: true };
+      mockAdapter.tabs.set(53, tab);
+
+      await organizer.handleTabCreated(tab);
+      expect((await mockAdapter.getTab(53)).groupId ?? -1).toBe(-1);
+    });
+
+    it('organizes a tab when it gets unpinned', async () => {
+      const tab = { id: 54, windowId: 1, url: 'https://google.com', active: false, pinned: true };
+      mockAdapter.tabs.set(54, tab);
+
+      // Tab was pinned: not grouped
+      await organizer.handleTabUpdated(54, { pinned: true }, tab);
+      expect((await mockAdapter.getTab(54)).groupId ?? -1).toBe(-1);
+
+      // User unpins the tab
+      const unpinnedTab = { ...tab, pinned: false };
+      mockAdapter.tabs.set(54, unpinnedTab);
+      await organizer.handleTabUpdated(54, { pinned: false }, unpinnedTab);
+
+      const result = await mockAdapter.getTab(54);
+      expect(result.groupId).toBeDefined();
+      expect(result.groupId).not.toBe(-1);
+      const group = await mockAdapter.getTabGroup(result.groupId!);
+      expect(group.title).toBe('Google');
+    });
+  });
 });

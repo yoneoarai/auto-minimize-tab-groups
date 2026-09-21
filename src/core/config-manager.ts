@@ -276,7 +276,6 @@ export class ConfigManager {
       [STORAGE_KEYS.CONFIG]: this.currentConfig,
       [STORAGE_KEYS.TIMEOUT]: this.currentConfig.defaultTimeoutMs,
     });
-    this.notifyListeners(this.currentConfig);
   }
 
   /**
@@ -319,14 +318,15 @@ export class ConfigManager {
    */
   public getRules(): GroupRule[] {
     const rules = this.currentConfig.rules || [];
-    return [...rules].sort((a, b) => a.order - b.order);
+    return [...rules].sort((a, b) => a.order - b.order).map(r => JSON.parse(JSON.stringify(r)));
   }
 
   /**
    * Gets a rule by its ID.
    */
   public getRuleById(id: string): GroupRule | undefined {
-    return (this.currentConfig.rules || []).find((r) => r.id === id);
+    const rule = (this.currentConfig.rules || []).find((r) => r.id === id);
+    return rule ? JSON.parse(JSON.stringify(rule)) : undefined;
   }
 
   /**

@@ -57,6 +57,9 @@ module.exports = (env, argv) => {
         ],
       }),
     ],
+    // NOTE: "web" target works for all entries because our code uses globalThis
+    // (not window) for API detection. Chrome MV3 background runs as a service worker,
+    // but since we avoid DOM APIs in background code, this is safe.
     target: "web",
     devtool: isProduction ? false : "source-map",
     optimization: {

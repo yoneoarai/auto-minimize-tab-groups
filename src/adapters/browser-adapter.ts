@@ -54,13 +54,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async getTab(tabId: number): Promise<BrowserTab> {
     const tabsApi = this.ensureApi('tabs');
-    try {
-      const res = tabsApi.get(tabId);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback to callback if promise not returned
+    const res = tabsApi.get(tabId);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       tabsApi.get(tabId, (tab: BrowserTab) => {
@@ -75,13 +71,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean }): Promise<BrowserTab[]> {
     const tabsApi = this.ensureApi('tabs');
-    try {
-      const res = tabsApi.query(queryInfo);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = tabsApi.query(queryInfo);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       tabsApi.query(queryInfo, (tabs: BrowserTab[]) => {
@@ -100,13 +92,9 @@ export class BrowserAdapter implements IBrowserAdapter {
     createProperties?: { windowId?: number };
   }): Promise<number> {
     const tabsApi = this.ensureApi('tabs');
-    try {
-      const res = tabsApi.group(options);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = tabsApi.group(options);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       tabsApi.group(options, (groupId: number) => {
@@ -121,13 +109,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async ungroupTabs(tabIds: number[]): Promise<void> {
     const tabsApi = this.ensureApi('tabs');
-    try {
-      const res = tabsApi.ungroup(tabIds);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = tabsApi.ungroup(tabIds);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       tabsApi.ungroup(tabIds, () => {
@@ -146,13 +130,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async getTabGroup(groupId: number): Promise<BrowserTabGroup> {
     const groupsApi = this.ensureApi('tabGroups');
-    try {
-      const res = groupsApi.get(groupId);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = groupsApi.get(groupId);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       groupsApi.get(groupId, (group: BrowserTabGroup) => {
@@ -167,13 +147,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async queryTabGroups(queryInfo: { windowId?: number }): Promise<BrowserTabGroup[]> {
     const groupsApi = this.ensureApi('tabGroups');
-    try {
-      const res = groupsApi.query(queryInfo);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = groupsApi.query(queryInfo);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       groupsApi.query(queryInfo, (groups: BrowserTabGroup[]) => {
@@ -191,13 +167,9 @@ export class BrowserAdapter implements IBrowserAdapter {
     updateProperties: { collapsed?: boolean; title?: string; color?: string }
   ): Promise<BrowserTabGroup> {
     const groupsApi = this.ensureApi('tabGroups');
-    try {
-      const res = groupsApi.update(groupId, updateProperties);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = groupsApi.update(groupId, updateProperties);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       groupsApi.update(groupId, updateProperties, (group: BrowserTabGroup) => {
@@ -212,14 +184,10 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async moveTabGroup(groupId: number, moveProperties: { index: number }): Promise<void> {
     const groupsApi = this.ensureApi('tabGroups');
-    try {
-      const res = groupsApi.move(groupId, moveProperties);
-      if (res && typeof res.then === 'function') {
-        await res;
-        return;
-      }
-    } catch {
-      // Fallback
+    const res = groupsApi.move(groupId, moveProperties);
+    if (res && typeof res.then === 'function') {
+      await res;
+      return;
     }
     return new Promise((resolve, reject) => {
       groupsApi.move(groupId, moveProperties, () => {
@@ -238,13 +206,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async requestPermission(permissions: string[]): Promise<boolean> {
     const permApi = this.ensureApi('permissions');
-    try {
-      const res = permApi.request({ permissions });
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = permApi.request({ permissions });
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       permApi.request({ permissions }, (granted: boolean) => {
@@ -259,13 +223,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async hasPermission(permissions: string[]): Promise<boolean> {
     const permApi = this.ensureApi('permissions');
-    try {
-      const res = permApi.contains({ permissions });
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = permApi.contains({ permissions });
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       permApi.contains({ permissions }, (hasPerm: boolean) => {
@@ -284,13 +244,9 @@ export class BrowserAdapter implements IBrowserAdapter {
 
   public async getAllWindows(getInfo?: { populate?: boolean }): Promise<BrowserWindow[]> {
     const windowsApi = this.ensureApi('windows');
-    try {
-      const res = windowsApi.getAll(getInfo ?? {});
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = windowsApi.getAll(getInfo ?? {});
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       windowsApi.getAll(getInfo ?? {}, (windows: BrowserWindow[]) => {
@@ -310,13 +266,9 @@ export class BrowserAdapter implements IBrowserAdapter {
   public async getStorage(keys: string[]): Promise<Record<string, any>> {
     const storageApi = this.ensureApi('storage');
     const syncOrLocal = storageApi.sync ?? storageApi.local;
-    try {
-      const res = syncOrLocal.get(keys);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = syncOrLocal.get(keys);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       syncOrLocal.get(keys, (items: Record<string, any>) => {
@@ -332,13 +284,9 @@ export class BrowserAdapter implements IBrowserAdapter {
   public async setStorage(items: Record<string, any>): Promise<void> {
     const storageApi = this.ensureApi('storage');
     const syncOrLocal = storageApi.sync ?? storageApi.local;
-    try {
-      const res = syncOrLocal.set(items);
-      if (res && typeof res.then === 'function') {
-        return await res;
-      }
-    } catch {
-      // Fallback
+    const res = syncOrLocal.set(items);
+    if (res && typeof res.then === 'function') {
+      return await res;
     }
     return new Promise((resolve, reject) => {
       syncOrLocal.set(items, () => {

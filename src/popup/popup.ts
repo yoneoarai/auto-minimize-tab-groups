@@ -47,13 +47,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const openSettingsBtn = document.getElementById('open-settings-btn');
   if (openSettingsBtn) {
     openSettingsBtn.addEventListener('click', () => {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
-        chrome.runtime.openOptionsPage();
-      } else if (typeof (globalThis as any).browser !== 'undefined' && (globalThis as any).browser.runtime?.openOptionsPage) {
-        (globalThis as any).browser.runtime.openOptionsPage();
-      } else {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+          chrome.runtime.openOptionsPage();
+        } else if (typeof (globalThis as any).browser !== 'undefined' && (globalThis as any).browser.runtime?.openOptionsPage) {
+          (globalThis as any).browser.runtime.openOptionsPage();
+        } else {
+          window.open('options.html');
+        }
+      } catch {
         window.open('options.html');
       }
+      window.close();
     });
   }
 

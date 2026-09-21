@@ -490,6 +490,17 @@
       </div>
     </header>
 
+    <!-- Permission Warning Banner -->
+    <div id="permission-banner" class="card" style="display: none; background: #fef7e0; border-color: #f9ab00; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div>
+          <div style="font-weight: 600; color: #b06000; font-size: 14px; margin-bottom: 4px;">⚠️ Tab Access Permission Needed</div>
+          <div style="font-size: 13px; color: #5f6368;">Tabbi needs access to tab URLs to match your grouping rules.</div>
+        </div>
+        <button id="grant-permission-btn" class="btn btn-primary btn-sm" style="white-space: nowrap;">Grant Permission</button>
+      </div>
+    </div>
+
     <!-- Default Timeout Card -->
     <div class="card">
       <div class="card-title">Default Collapse Timeout</div>
@@ -530,7 +541,7 @@
         </label>
       </div>
 
-      <div id="general-group-settings" style="margin-top: 14px; padding-left: 24px; display: none;">
+      <div id="general-group-settings" style="margin-top: 14px; padding-left: 24px; opacity: 0.45; pointer-events: none; transition: opacity 0.2s;">
         <div class="form-group" style="max-width: 240px;">
           <label for="general-group-name">Group Name</label>
           <input type="text" id="general-group-name" value="General">

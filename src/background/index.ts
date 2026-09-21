@@ -11,10 +11,15 @@ const configManager = new ConfigManager(browserAdapter);
 const groupManager = new GroupManager(browserAdapter, configManager);
 const tabOrganizer = new TabOrganizer(browserAdapter, configManager, RuleEngine);
 
+let initialized = false;
+
 /**
  * Initializes the extension state by loading settings, organizing tabs, and setting up initial timers.
  */
 async function initialize(): Promise<void> {
+  if (initialized) return;
+  initialized = true;
+
   try {
     const config = await configManager.loadConfig();
     if (config.enabled) {
@@ -28,9 +33,14 @@ async function initialize(): Promise<void> {
 
 // React to config updates
 configManager.onConfigChanged((config) => {
-  if (config.enabled && config.reorganizeOnRuleChange) {
-    tabOrganizer.organizeAllTabs().catch((err) => {
-      console.warn('Error organizing tabs on config change:', err);
+  if (config.enabled) {
+    if (config.reorganizeOnRuleChange) {
+      tabOrganizer.organizeAllTabs().catch((err) => {
+        console.warn('Error organizing tabs on config change:', err);
+      });
+    }
+    groupManager.refreshGroupTimers().catch((err) => {
+      console.warn('Error refreshing timers on config change:', err);
     });
   }
 });

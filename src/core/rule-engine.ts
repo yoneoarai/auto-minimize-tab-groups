@@ -13,6 +13,7 @@ function escapeRegexExceptWildcard(str: string): string {
  * Compiles user-defined URL patterns and matches URLs against configured group rules.
  */
 export class RuleEngine {
+  private static readonly MAX_CACHE_SIZE = 500;
   private static patternCache: Map<string, RegExp> = new Map();
 
   /**
@@ -124,10 +125,18 @@ export class RuleEngine {
       fullPathRegex = `${pathRegex}(?:[?#].*)?$`;
     } else {
       // No path specified: matches exact host or host with any path/query/hash
-      fullPathRegex = '(?:\\/.*)?$';
+      fullPathRegex = '(?:[\\/?#].*)?$';
     }
 
     const compiled = new RegExp(`^${schemePart}${fullHostRegex}${portRegex}${fullPathRegex}`, 'i');
+    // Evict oldest entries if cache is full
+    if (RuleEngine.patternCache.size >= RuleEngine.MAX_CACHE_SIZE) {
+      const firstKey = RuleEngine.patternCache.keys().next().value;
+      if (firstKey !== undefined) {
+        RuleEngine.patternCache.delete(firstKey);
+      }
+    }
+
     RuleEngine.patternCache.set(trimmed, compiled);
     return compiled;
   }
@@ -165,10 +174,8 @@ export class RuleEngine {
       return null;
     }
 
-    // Rules are evaluated in their sorted order (lower order number first)
-    const sortedRules = [...rules].sort((a, b) => a.order - b.order);
-
-    for (const rule of sortedRules) {
+    // Rules are expected to be pre-sorted by order (ConfigManager.getRules() handles this)
+    for (const rule of rules) {
       if (!rule.patterns || rule.patterns.length === 0) {
         continue;
       }

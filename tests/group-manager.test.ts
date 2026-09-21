@@ -298,5 +298,32 @@ describe('GroupManager', () => {
       const group = await mockAdapter.getTabGroup(generalGroup);
       expect(group.collapsed).toBe(false);
     });
+
+    it('does not reset an already-running timer on an inactive group when refreshing timers', async () => {
+      const groupId = 806;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(86, { id: 86, groupId, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+      const initialTimer = groupManager.getGroupState(groupId)?.timer;
+      expect(initialTimer).not.toBeNull();
+
+      // Advance halfway through timeout (15s out of 30s)
+      await jest.advanceTimersByTimeAsync(15000);
+
+      // Refresh timers again (e.g. triggered by tab creation or removal in another group)
+      await groupManager.refreshGroupTimers();
+
+      // Timer reference must be identical (not blown away and restarted)
+      const currentTimer = groupManager.getGroupState(groupId)?.timer;
+      expect(currentTimer).toBe(initialTimer);
+
+      // Advance the remaining 15s (total 30s from original arming)
+      await jest.advanceTimersByTimeAsync(15000);
+
+      // Group should now be collapsed on schedule
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(true);
+    });
   });
 });

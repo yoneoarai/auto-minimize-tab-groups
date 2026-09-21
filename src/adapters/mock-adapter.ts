@@ -56,6 +56,13 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     groupId?: number;
     createProperties?: { windowId?: number };
   }): Promise<number> {
+    for (const tabId of options.tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab?.pinned) {
+        throw new Error('Tabs cannot be grouped while pinned.');
+      }
+    }
+
     let targetGroupId = options.groupId;
     if (targetGroupId === undefined) {
       targetGroupId = this.nextGroupId++;

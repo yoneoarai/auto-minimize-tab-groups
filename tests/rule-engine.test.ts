@@ -36,6 +36,8 @@ describe('RuleEngine', () => {
 
       it('matches with paths and query strings', () => {
         expect(RuleEngine.testPattern(pattern, 'https://google.com/search?q=test')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://google.com?q=test')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://google.com#top')).toBe(true);
         expect(RuleEngine.testPattern(pattern, 'https://www.google.com/maps')).toBe(true);
       });
 

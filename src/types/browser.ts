@@ -10,6 +10,7 @@ export interface BrowserTab {
   openerTabId?: number;
   url?: string;
   pendingUrl?: string;
+  pinned?: boolean;
 }
 
 export interface BrowserTabGroup {
@@ -34,6 +35,7 @@ export interface TabChangeInfo {
   groupId?: number;
   status?: string;
   url?: string;
+  pinned?: boolean;
 }
 
 export interface TabRemoveInfo {

@@ -21,11 +21,19 @@
     "open_in_tab": true
   },
   "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
     "128": "icon.png"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tabbi - Tab Group Manager"
+    "default_title": "Tabbi - Tab Group Manager",
+    "default_icon": {
+      "16": "icon.png",
+      "32": "icon.png",
+      "48": "icon.png"
+    }
   },
   "browser_specific_settings": {
     "gecko": {
