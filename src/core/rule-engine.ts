@@ -99,10 +99,10 @@ export class RuleEngine {
     // Convert host part
     let hostRegex: string;
     if (hostPart.startsWith('*.')) {
-      // Subdomain wildcard: e.g. *.google.com requires at least one subdomain segment
+      // Subdomain wildcard: e.g. *.google.com matches apex (google.com) and any subdomain (mail.google.com)
       const domainWithoutWildcard = hostPart.slice(2);
       const escapedDomain = escapeRegexExceptWildcard(domainWithoutWildcard).replace(/\*/g, '[^/:]*');
-      hostRegex = `(?:[^/:]+\\.)+${escapedDomain}`;
+      hostRegex = `(?:(?:[^/:]+\\.)+)?${escapedDomain}`;
     } else {
       hostRegex = escapeRegexExceptWildcard(hostPart).replace(/\*/g, '[^/:]*');
     }
@@ -174,8 +174,9 @@ export class RuleEngine {
       return null;
     }
 
-    // Rules are expected to be pre-sorted by order (ConfigManager.getRules() handles this)
-    for (const rule of rules) {
+    // Rules are evaluated strictly by ascending order / priority (Priority 1 first)
+    const sortedRules = [...rules].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    for (const rule of sortedRules) {
       if (!rule.patterns || rule.patterns.length === 0) {
         continue;
       }

@@ -60,9 +60,9 @@ describe('RuleEngine', () => {
         expect(RuleEngine.testPattern(pattern, 'https://sub.sub.google.com/')).toBe(true);
       });
 
-      it('does not match exact apex domain without subdomain', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://google.com')).toBe(false);
-        expect(RuleEngine.testPattern(pattern, 'https://google.com/search')).toBe(false);
+      it('matches apex domain as well as subdomains', () => {
+        expect(RuleEngine.testPattern(pattern, 'https://google.com')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://google.com/search')).toBe(true);
       });
 
       it('does not match unrelated domains', () => {
@@ -159,6 +159,14 @@ describe('RuleEngine', () => {
       expect(result).not.toBeNull();
       expect(result!.rule.id).toBe('rule-github-work');
       expect(result!.matchedPattern).toBe('github.com/myorg/*');
+    });
+
+    it('evaluates by rule.order priority even if rules array is unsorted', () => {
+      // Pass rules in reverse order: general (order 2) before work (order 0)
+      const reversedRules = [rules[2], rules[0], rules[1]];
+      const result = RuleEngine.matchUrlWithDetail('https://github.com/myorg/project', reversedRules);
+      expect(result).not.toBeNull();
+      expect(result!.rule.id).toBe('rule-github-work');
     });
 
     it('falls back to lower priority rule when higher priority does not match', () => {

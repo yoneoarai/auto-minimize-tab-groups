@@ -332,6 +332,113 @@ describe('ConfigManager', () => {
       expect(sorted[0].id).toBe(r2.id);
       expect(sorted[1].id).toBe(r1.id);
     });
+
+    it('inserts new rule at specified priority/order and shifts existing rules', async () => {
+      const r1 = await configManager.addRule({
+        name: 'First',
+        color: 'blue',
+        patterns: ['first.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+      const r2 = await configManager.addRule({
+        name: 'Second',
+        color: 'green',
+        patterns: ['second.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+
+      // Insert at priority 1 (order 0)
+      const rTop = await configManager.addRule({
+        name: 'Top Priority',
+        color: 'red',
+        patterns: ['top.com'],
+        collapse: { enabled: true, timeoutMs: null },
+        order: 0,
+      });
+
+      const rules = configManager.getRules();
+      expect(rules.length).toBe(3);
+      expect(rules[0].id).toBe(rTop.id);
+      expect(rules[0].order).toBe(0);
+      expect(rules[1].id).toBe(r1.id);
+      expect(rules[1].order).toBe(1);
+      expect(rules[2].id).toBe(r2.id);
+      expect(rules[2].order).toBe(2);
+    });
+
+    it('updates rule priority/order and maintains sequential indexing', async () => {
+      const r1 = await configManager.addRule({
+        name: 'A',
+        color: 'blue',
+        patterns: ['a.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+      const r2 = await configManager.addRule({
+        name: 'B',
+        color: 'red',
+        patterns: ['b.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+      const r3 = await configManager.addRule({
+        name: 'C',
+        color: 'yellow',
+        patterns: ['c.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+
+      // Move C to priority 1 (order 0)
+      await configManager.updateRule(r3.id, { order: 0 });
+
+      const rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['C', 'A', 'B']);
+      expect(rules.map((r) => r.order)).toEqual([0, 1, 2]);
+    });
+
+    it('moves a rule up and down with moveRule', async () => {
+      const r1 = await configManager.addRule({
+        name: 'First',
+        color: 'blue',
+        patterns: ['first.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+      const r2 = await configManager.addRule({
+        name: 'Second',
+        color: 'green',
+        patterns: ['second.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+      const r3 = await configManager.addRule({
+        name: 'Third',
+        color: 'yellow',
+        patterns: ['third.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+
+      // Move Second up (swap with First)
+      await configManager.moveRule(r2.id, 'up');
+      let rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['Second', 'First', 'Third']);
+      expect(rules.map((r) => r.order)).toEqual([0, 1, 2]);
+
+      // Move Second up again (already at top -> noop)
+      await configManager.moveRule(r2.id, 'up');
+      rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['Second', 'First', 'Third']);
+
+      // Move Second down twice
+      await configManager.moveRule(r2.id, 'down');
+      rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['First', 'Second', 'Third']);
+
+      await configManager.moveRule(r2.id, 'down');
+      rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['First', 'Third', 'Second']);
+
+      // Move down when already at bottom -> noop
+      await configManager.moveRule(r2.id, 'down');
+      rules = configManager.getRules();
+      expect(rules.map((r) => r.name)).toEqual(['First', 'Third', 'Second']);
+    });
   });
 
   describe('Extension Settings', () => {

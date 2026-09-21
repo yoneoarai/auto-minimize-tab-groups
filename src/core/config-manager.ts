@@ -335,6 +335,11 @@ export class ConfigManager {
   public async addRule(
     ruleData: Omit<GroupRule, 'id' | 'order'> & { id?: string; order?: number }
   ): Promise<GroupRule> {
+    const existingRules = this.getRules();
+    let targetOrder = typeof ruleData.order === 'number' && ruleData.order >= 0
+      ? Math.min(ruleData.order, existingRules.length)
+      : existingRules.length;
+
     const newRule: GroupRule = {
       id: ruleData.id || generateRuleId(),
       name: ruleData.name.trim(),
@@ -344,7 +349,7 @@ export class ConfigManager {
         enabled: ruleData.collapse?.enabled ?? true,
         timeoutMs: ruleData.collapse?.timeoutMs ?? null,
       },
-      order: ruleData.order ?? (this.currentConfig.rules || []).length,
+      order: targetOrder,
     };
 
     const validation = ConfigManager.validateRule(newRule);
@@ -352,10 +357,12 @@ export class ConfigManager {
       throw new Error(validation.errorMessage);
     }
 
-    if (!this.currentConfig.rules) {
-      this.currentConfig.rules = [];
-    }
-    this.currentConfig.rules.push(newRule);
+    existingRules.splice(targetOrder, 0, newRule);
+    existingRules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = existingRules;
     await this.saveConfig();
     return newRule;
   }
@@ -364,12 +371,13 @@ export class ConfigManager {
    * Updates an existing rule by ID.
    */
   public async updateRule(id: string, updates: Partial<Omit<GroupRule, 'id'>>): Promise<void> {
-    const index = (this.currentConfig.rules || []).findIndex((r) => r.id === id);
+    const currentRules = this.getRules();
+    const index = currentRules.findIndex((r) => r.id === id);
     if (index === -1) {
       throw new Error(`Rule with ID "${id}" not found.`);
     }
 
-    const existing = this.currentConfig.rules![index];
+    const existing = currentRules[index];
     const updated: GroupRule = {
       ...existing,
       ...updates,
@@ -390,7 +398,47 @@ export class ConfigManager {
       throw new Error(validation.errorMessage);
     }
 
-    this.currentConfig.rules![index] = updated;
+    if (typeof updates.order === 'number' && updates.order !== existing.order) {
+      currentRules.splice(index, 1);
+      const newPos = Math.max(0, Math.min(updates.order, currentRules.length));
+      currentRules.splice(newPos, 0, updated);
+    } else {
+      currentRules[index] = updated;
+    }
+
+    currentRules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = currentRules;
+    await this.saveConfig();
+  }
+
+  /**
+   * Moves a rule up (higher priority) or down (lower priority).
+   */
+  public async moveRule(id: string, direction: 'up' | 'down'): Promise<void> {
+    const rules = this.getRules();
+    const index = rules.findIndex((r) => r.id === id);
+    if (index === -1) return;
+
+    if (direction === 'up' && index > 0) {
+      const temp = rules[index];
+      rules[index] = rules[index - 1];
+      rules[index - 1] = temp;
+    } else if (direction === 'down' && index < rules.length - 1) {
+      const temp = rules[index];
+      rules[index] = rules[index + 1];
+      rules[index + 1] = temp;
+    } else {
+      return;
+    }
+
+    rules.forEach((r, idx) => {
+      r.order = idx;
+    });
+
+    this.currentConfig.rules = rules;
     await this.saveConfig();
   }
 
@@ -421,21 +469,22 @@ export class ConfigManager {
     const ruleMap = new Map(currentRules.map((r) => [r.id, r]));
 
     const reordered: GroupRule[] = [];
-    orderedIds.forEach((id, idx) => {
+    orderedIds.forEach((id) => {
       const rule = ruleMap.get(id);
       if (rule) {
-        rule.order = idx;
         reordered.push(rule);
         ruleMap.delete(id);
       }
     });
 
     // Append any rules not explicitly included in orderedIds
-    let remainingOrder = reordered.length;
     for (const rule of ruleMap.values()) {
-      rule.order = remainingOrder++;
       reordered.push(rule);
     }
+
+    reordered.forEach((r, idx) => {
+      r.order = idx;
+    });
 
     this.currentConfig.rules = reordered;
     await this.saveConfig();

@@ -72,7 +72,7 @@ export class TabOrganizer {
       return;
     }
 
-    const rules = config.rules || [];
+    const rules = this.configManager.getRules();
     const matchedRule = this.ruleEngine.matchUrl(url, rules);
 
     if (matchedRule) {
@@ -112,7 +112,7 @@ export class TabOrganizer {
             groupId: targetGroup.id,
           });
         } finally {
-          setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 200);
+          setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 1000);
         }
       }
       return targetGroup.id;
@@ -132,7 +132,7 @@ export class TabOrganizer {
 
         return newGroupId;
       } finally {
-        setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 200);
+        setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 1000);
       }
     }
   }

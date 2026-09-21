@@ -135,7 +135,7 @@ function renderRulesList(): void {
 
   let draggedItem: HTMLElement | null = null;
 
-  rules.forEach((rule) => {
+  rules.forEach((rule, index) => {
     const item = document.createElement('div');
     item.className = 'rule-item';
     item.draggable = true;
@@ -148,12 +148,23 @@ function renderRulesList(): void {
       collapseBadge = `Collapse: ${Math.round(rule.collapse.timeoutMs / 1000)}s`;
     }
 
+    const priorityNum = index + 1;
+    const isFirst = index === 0;
+    const isLast = index === rules.length - 1;
+
     item.innerHTML = `
       <div class="rule-left">
+        <div class="priority-controls">
+          <button class="move-btn move-up-btn" title="Move Up (Higher Priority)" ${isFirst ? 'disabled' : ''}>▲</button>
+          <button class="move-btn move-down-btn" title="Move Down (Lower Priority)" ${isLast ? 'disabled' : ''}>▼</button>
+        </div>
         <span class="drag-handle" title="Drag to reorder">≡</span>
         <div class="color-dot color-${rule.color}"></div>
         <div class="rule-info">
-          <span class="rule-name">${rule.name}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="rule-name">${rule.name}</span>
+            <span class="priority-badge ${index === 0 ? 'p1' : ''}">Priority ${priorityNum}</span>
+          </div>
           <span class="rule-patterns">${rule.patterns.join(', ')}</span>
           <span class="rule-badge">${collapseBadge}</span>
         </div>
@@ -197,6 +208,21 @@ function renderRulesList(): void {
       );
       await configManager.reorderRules(updatedIds);
       showToast('Rules reordered');
+    });
+
+    // Priority move buttons
+    item.querySelector('.move-up-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await configManager.moveRule(rule.id, 'up');
+      renderRulesList();
+      showToast(`Moved "${rule.name}" up`);
+    });
+
+    item.querySelector('.move-down-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await configManager.moveRule(rule.id, 'down');
+      renderRulesList();
+      showToast(`Moved "${rule.name}" down`);
     });
 
     // Action buttons
@@ -246,12 +272,23 @@ function openRuleDialog(rule?: GroupRule): void {
   if (testerInput) testerInput.value = '';
   updateTesterResult();
 
+  const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
+  const existingRules = configManager.getRules();
+
   if (rule) {
     activeEditingRuleId = rule.id;
     title.textContent = 'Edit Rule';
     nameInput.value = rule.name;
     currentModalColor = rule.color;
     currentModalPatterns = [...rule.patterns];
+
+    if (priorityInput) {
+      const currentIdx = existingRules.findIndex((r) => r.id === rule.id);
+      const prio = currentIdx !== -1 ? currentIdx + 1 : (rule.order ?? 0) + 1;
+      priorityInput.value = String(prio);
+      priorityInput.min = '1';
+      priorityInput.max = String(Math.max(1, existingRules.length));
+    }
 
     if (!rule.collapse.enabled) {
       (document.querySelector('input[name="rule-collapse"][value="disabled"]') as HTMLInputElement).checked = true;
@@ -271,6 +308,12 @@ function openRuleDialog(rule?: GroupRule): void {
     currentModalPatterns = [];
     if (customTimeoutInput) {
       customTimeoutInput.value = '5';
+    }
+    if (priorityInput) {
+      const nextPriority = existingRules.length + 1;
+      priorityInput.value = String(nextPriority);
+      priorityInput.min = '1';
+      priorityInput.max = String(nextPriority);
     }
     (document.querySelector('input[name="rule-collapse"][value="default"]') as HTMLInputElement).checked = true;
   }
@@ -679,6 +722,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       collapse = { enabled: true, timeoutMs: customSeconds * 1000 };
     }
 
+    const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
+    const priorityVal = parseInt(priorityInput?.value || '1', 10);
+    const targetOrder = !isNaN(priorityVal) && priorityVal >= 1 ? priorityVal - 1 : undefined;
+
     try {
       if (activeEditingRuleId) {
         await configManager.updateRule(activeEditingRuleId, {
@@ -686,6 +733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           color: currentModalColor,
           patterns: currentModalPatterns,
           collapse,
+          order: targetOrder,
         });
         showToast(`Rule "${name}" updated`);
       } else {
@@ -694,6 +742,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           color: currentModalColor,
           patterns: currentModalPatterns,
           collapse,
+          order: targetOrder,
         });
         showToast(`Rule "${name}" created`);
       }
