@@ -152,7 +152,6 @@ function renderRulesList(): void {
       collapseBadge = `Collapse: ${Math.round(rule.collapse.timeoutMs / 1000)}s`;
     }
 
-    const positionNum = index + 1;
     const priorityNum = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? index) + 1;
     const isFirst = index === 0;
     const isLast = index === rules.length - 1;
@@ -168,7 +167,6 @@ function renderRulesList(): void {
         <div class="rule-info">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span class="rule-name"></span>
-            <span class="order-badge" title="Position #${positionNum} in browser tab strip">Pos ${positionNum}</span>
             <span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>
           </div>
           <span class="rule-patterns"></span>
