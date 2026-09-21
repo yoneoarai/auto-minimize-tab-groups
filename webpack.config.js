@@ -58,6 +58,10 @@ module.exports = (env, argv) => {
             from: "icon.png",
             to: "icon.png",
           },
+          {
+            from: "icon-large.svg",
+            to: "icon-large.svg",
+          },
         ],
       }),
     ],

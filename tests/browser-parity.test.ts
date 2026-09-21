@@ -157,9 +157,9 @@ describe('Cross-Browser Parity & UX Consistency', () => {
 
     it('options.html and popup.html render the official extension icon in their headers', () => {
       expect(optionsHtml).toContain('class="brand-icon"');
-      expect(optionsHtml).toContain('src="icons/icon-48.png"');
+      expect(optionsHtml).toContain('src="icon-large.svg"');
       expect(popupHtml).toContain('class="header-icon"');
-      expect(popupHtml).toContain('src="icons/icon-32.png"');
+      expect(popupHtml).toContain('src="icon-large.svg"');
     });
   });
 
