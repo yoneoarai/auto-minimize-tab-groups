@@ -112,6 +112,57 @@
         font-weight: 600;
       }
 
+      .control-card {
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+      }
+
+      .control-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .control-text {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .control-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-primary);
+      }
+
+      .control-subtitle {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+
+      .control-card.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      .paused-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: #fef08a;
+        color: #854d0e;
+        padding: 1px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+
       .btn {
         display: flex;
         align-items: center;
@@ -141,6 +192,19 @@
         <input type="checkbox" id="popup-enable-toggle" checked>
         <span class="slider"></span>
       </label>
+    </div>
+
+    <div class="control-card" id="pause-collapse-card">
+      <div class="control-row">
+        <div class="control-text">
+          <span class="control-title">Pause auto-collapse</span>
+          <span class="control-subtitle">Keep groups open while working</span>
+        </div>
+        <label class="switch" title="Pause auto-collapsing for all groups">
+          <input type="checkbox" id="popup-pause-collapse-toggle">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
     <div class="stats-card">

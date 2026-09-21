@@ -55,4 +55,5 @@ export const createDefaultConfig = (): ExtensionConfig => ({
   },
   groupOrdering: 'manual',
   reorganizeOnRuleChange: true,
+  collapsePaused: false,
 });

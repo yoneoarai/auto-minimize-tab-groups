@@ -6,10 +6,26 @@ const configManager = new ConfigManager(browserAdapter);
 
 async function refreshDisplay(): Promise<void> {
   const config = configManager.getConfig();
+  const isEnabled = config.enabled ?? true;
+  const isPaused = Boolean(config.collapsePaused);
 
   const toggle = document.getElementById('popup-enable-toggle') as HTMLInputElement;
   if (toggle) {
-    toggle.checked = config.enabled ?? true;
+    toggle.checked = isEnabled;
+  }
+
+  const pauseToggle = document.getElementById('popup-pause-collapse-toggle') as HTMLInputElement;
+  const pauseCard = document.getElementById('pause-collapse-card');
+  if (pauseToggle) {
+    pauseToggle.checked = isPaused;
+    pauseToggle.disabled = !isEnabled;
+  }
+  if (pauseCard) {
+    if (!isEnabled) {
+      pauseCard.classList.add('disabled');
+    } else {
+      pauseCard.classList.remove('disabled');
+    }
   }
 
   const rulesCountEl = document.getElementById('stat-rules-count');
@@ -19,7 +35,11 @@ async function refreshDisplay(): Promise<void> {
 
   const timeoutEl = document.getElementById('stat-timeout');
   if (timeoutEl) {
-    timeoutEl.textContent = `${configManager.getTimeoutSeconds()}s`;
+    if (isPaused) {
+      timeoutEl.innerHTML = `${configManager.getTimeoutSeconds()}s <span class="paused-badge">Paused</span>`;
+    } else {
+      timeoutEl.textContent = `${configManager.getTimeoutSeconds()}s`;
+    }
   }
 
   const groupsCountEl = document.getElementById('stat-groups-count');
@@ -41,6 +61,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (toggle) {
     toggle.addEventListener('change', async () => {
       await configManager.setEnabled(toggle.checked);
+    });
+  }
+
+  const pauseToggle = document.getElementById('popup-pause-collapse-toggle') as HTMLInputElement;
+  if (pauseToggle) {
+    pauseToggle.addEventListener('change', async () => {
+      await configManager.setCollapsePaused(pauseToggle.checked);
     });
   }
 

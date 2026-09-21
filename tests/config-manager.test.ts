@@ -490,5 +490,17 @@ describe('ConfigManager', () => {
       expect(imported.defaultTimeoutMs).toBe(40000);
       expect(imported.unmatchedTabBehavior).toBe('general-group');
     });
+
+    it('manages collapsePaused state', async () => {
+      expect(configManager.isCollapsePaused()).toBe(false);
+
+      await configManager.setCollapsePaused(true);
+      expect(configManager.isCollapsePaused()).toBe(true);
+      expect(configManager.getConfig().collapsePaused).toBe(true);
+
+      await configManager.setCollapsePaused(false);
+      expect(configManager.isCollapsePaused()).toBe(false);
+      expect(configManager.getConfig().collapsePaused).toBe(false);
+    });
   });
 });

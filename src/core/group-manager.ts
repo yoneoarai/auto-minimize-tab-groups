@@ -78,7 +78,7 @@ export class GroupManager {
     const config = this.configManager.getConfig();
     const defaultTimeoutMs = config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-    if (config.enabled === false) {
+    if (config.enabled === false || config.collapsePaused === true) {
       return { enabled: false, timeoutMs: defaultTimeoutMs };
     }
 
@@ -195,7 +195,7 @@ export class GroupManager {
    */
   public setGroupTimer(groupId: number, windowId: number, customDelayMs?: number): void {
     const config = this.configManager.getConfig();
-    if (config.enabled === false) {
+    if (config.enabled === false || config.collapsePaused === true) {
       this.removeGroupTimer(groupId);
       return;
     }
@@ -304,6 +304,11 @@ export class GroupManager {
    * Reactivates the timer for a group when focus switches away from it.
    */
   public async reactivateTimerForGroup(groupId: number): Promise<void> {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
+
     try {
       const group = await this.browserAdapter.getTabGroup(groupId);
       this.setGroupMetadata(groupId, {
@@ -329,7 +334,7 @@ export class GroupManager {
   private async handleTimerFired(groupId: number): Promise<void> {
     try {
       const config = this.configManager.getConfig();
-      if (config.enabled === false) {
+      if (config.enabled === false || config.collapsePaused === true) {
         this.removeGroupTimer(groupId);
         return;
       }
@@ -375,6 +380,11 @@ export class GroupManager {
    * Debounces a full refresh of all tab group timers.
    */
   public debounceRefreshTimers(): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
@@ -399,7 +409,12 @@ export class GroupManager {
 
     try {
       const config = this.configManager.getConfig();
-      if (config.enabled === false) {
+      if (config.enabled === false || config.collapsePaused === true) {
+        for (const [, state] of this.groupTimers) {
+          if (state.timer) {
+            clearTimeout(state.timer);
+          }
+        }
         this.groupTimers.clear();
         return;
       }
@@ -488,7 +503,11 @@ export class GroupManager {
       }
     }
     this.groupTimers.clear();
-    this.debounceRefreshTimers();
+
+    const config = this.configManager.getConfig();
+    if (config.enabled !== false && config.collapsePaused !== true) {
+      this.debounceRefreshTimers();
+    }
   }
 
   // ==========================================================================
@@ -524,7 +543,14 @@ export class GroupManager {
     try {
       if (tab.groupId !== undefined && tab.groupId !== -1 && tab.windowId) {
         await this.openGroupForVisibility(tab.groupId, tab.windowId);
+      }
 
+      const config = this.configManager.getConfig();
+      if (config.enabled === false || config.collapsePaused === true) {
+        return;
+      }
+
+      if (tab.groupId !== undefined && tab.groupId !== -1 && tab.windowId) {
         if (tab.groupId !== this.activeGroupId) {
           const groupId = tab.groupId;
           const windowId = tab.windowId;
@@ -594,8 +620,11 @@ export class GroupManager {
           }
         }
 
+        const config = this.configManager.getConfig();
+        const isPaused = config.enabled === false || config.collapsePaused === true;
+
         if (changeInfo.groupId === -1) {
-          if (!tab.active) {
+          if (!tab.active && !isPaused) {
             this.debounceRefreshTimers();
           }
         } else {
@@ -603,7 +632,7 @@ export class GroupManager {
             await this.openGroupForVisibility(changeInfo.groupId, tab.windowId);
           }
 
-          if (!tab.active && changeInfo.groupId !== this.activeGroupId && tab.windowId) {
+          if (!tab.active && changeInfo.groupId !== this.activeGroupId && tab.windowId && !isPaused) {
             const groupId = changeInfo.groupId;
             const windowId = tab.windowId;
 
@@ -622,6 +651,10 @@ export class GroupManager {
   }
 
   public handleTabRemoved(_tabId: number, _removeInfo: TabRemoveInfo): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
     this.debounceRefreshTimers();
   }
 
@@ -636,6 +669,11 @@ export class GroupManager {
       if (group.collapsed) {
         this.removeGroupTimer(groupId);
       } else {
+        const config = this.configManager.getConfig();
+        if (config.enabled === false || config.collapsePaused === true) {
+          return;
+        }
+
         if (groupId !== this.activeGroupId) {
           const groupTabs = await this.browserAdapter.queryTabs({ groupId });
           if (groupTabs.length > 0 && groupTabs[0].windowId) {
@@ -649,6 +687,10 @@ export class GroupManager {
   }
 
   public handleWindowFocusChanged(windowId: number): void {
+    const config = this.configManager.getConfig();
+    if (config.enabled === false || config.collapsePaused === true) {
+      return;
+    }
     if (windowId !== this.browserAdapter.WINDOW_ID_NONE) {
       this.debounceRefreshTimers();
     }

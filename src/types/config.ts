@@ -19,6 +19,7 @@ export interface ExtensionConfigV2 {
   };
   groupOrdering: 'manual' | 'alphabetical';
   reorganizeOnRuleChange: boolean;
+  collapsePaused: boolean;
 }
 
 /**
@@ -59,6 +60,9 @@ export interface ExtensionConfig {
 
   /** Whether to re-organize existing tabs when rules change */
   reorganizeOnRuleChange?: boolean;
+
+  /** Whether auto-collapsing is temporarily paused across all groups */
+  collapsePaused?: boolean;
 }
 
 export interface ValidationResult {

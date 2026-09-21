@@ -164,6 +164,7 @@ export class ConfigManager {
       },
       groupOrdering: 'manual',
       reorganizeOnRuleChange: true,
+      collapsePaused: false,
     };
   }
 
@@ -241,6 +242,7 @@ export class ConfigManager {
       groupOrdering: data.groupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
       reorganizeOnRuleChange:
         typeof data.reorganizeOnRuleChange === 'boolean' ? data.reorganizeOnRuleChange : true,
+      collapsePaused: Boolean(data.collapsePaused),
     };
   }
 
@@ -495,6 +497,21 @@ export class ConfigManager {
    */
   public async setEnabled(enabled: boolean): Promise<void> {
     this.currentConfig.enabled = Boolean(enabled);
+    await this.saveConfig();
+  }
+
+  /**
+   * Returns whether auto-collapsing is currently paused across all groups.
+   */
+  public isCollapsePaused(): boolean {
+    return Boolean(this.currentConfig.collapsePaused);
+  }
+
+  /**
+   * Pauses or resumes auto-collapsing across all groups.
+   */
+  public async setCollapsePaused(paused: boolean): Promise<void> {
+    this.currentConfig.collapsePaused = Boolean(paused);
     await this.saveConfig();
   }
 

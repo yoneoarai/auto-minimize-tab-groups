@@ -143,6 +143,7 @@ describe('Cross-Browser Parity & UX Consistency', () => {
     it('popup.html contains all critical interactive controls and stats counters', () => {
       const requiredPopupIds = [
         'popup-enable-toggle',
+        'popup-pause-collapse-toggle',
         'stat-rules-count',
         'stat-groups-count',
         'stat-timeout',

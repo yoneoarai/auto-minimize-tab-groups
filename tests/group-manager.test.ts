@@ -353,5 +353,56 @@ describe('GroupManager', () => {
       const group = await mockAdapter.getTabGroup(groupId);
       expect(group.collapsed).toBe(true);
     });
+
+    it('stops maintaining timers and prevents all collapsing when collapsePaused is enabled', async () => {
+      const groupId = 901;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(91, { id: 91, groupId, windowId: 1, active: false });
+
+      // Enable pause
+      await configManager.setCollapsePaused(true);
+
+      // Attempting to set timer directly or via refreshGroupTimers should arm zero timers
+      groupManager.setGroupTimer(groupId, 1);
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      await groupManager.refreshGroupTimers();
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      // Advancing time far past timeout does not collapse the group
+      await jest.advanceTimersByTimeAsync(120000);
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(false);
+    });
+
+    it('immediately cancels existing running timers when collapsePaused is turned on', async () => {
+      const groupId = 902;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(92, { id: 92, groupId, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // User clicks "Pause auto-collapse"
+      await configManager.setCollapsePaused(true);
+
+      // Existing timer must be cleared immediately
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      // Time advances — group remains open
+      await jest.advanceTimersByTimeAsync(60000);
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(false);
+
+      // User unpauses
+      await configManager.setCollapsePaused(false);
+      await jest.advanceTimersByTimeAsync(DEBOUNCE_DELAY_MS);
+
+      // Timer should be restored
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // After timeout expires, group collapses
+      await jest.advanceTimersByTimeAsync(30000);
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+    });
   });
 });
