@@ -59,6 +59,14 @@ export class RuleEngine {
       throw new Error('Pattern cannot be empty.');
     }
 
+    if (trimmed.startsWith('.') || trimmed === '*.' || trimmed === '.') {
+      throw new Error(`Invalid pattern "${trimmed}": domain pattern cannot start with a dot.`);
+    }
+
+    if (trimmed.endsWith('://')) {
+      throw new Error(`Invalid pattern "${trimmed}": must specify a host after the scheme.`);
+    }
+
     const cached = RuleEngine.patternCache.get(trimmed);
     if (cached) {
       return cached;
@@ -115,12 +123,12 @@ export class RuleEngine {
 
     // Convert path part
     let fullPathRegex: string;
-    if (pathPart) {
+    if (pathPart && pathPart !== '/') {
       let pathRegex = escapeRegexExceptWildcard(pathPart);
       pathRegex = pathRegex.replace(/\*/g, '.*');
       fullPathRegex = `${pathRegex}(?:[?#].*)?$`;
     } else {
-      // No path specified: matches exact host or host with any path/query/hash
+      // No path specified or single trailing slash: matches exact host or host with any path/query/hash
       fullPathRegex = '(?:[\\/?#].*)?$';
     }
 

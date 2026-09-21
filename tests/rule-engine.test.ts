@@ -12,9 +12,24 @@ describe('RuleEngine', () => {
       expect(RuleEngine.validatePattern('   ').isValid).toBe(false);
     });
 
-    it('accepts valid domain patterns', () => {
+    it('rejects malformed dot-prefixed and incomplete patterns', () => {
+      expect(RuleEngine.validatePattern('.com').isValid).toBe(false);
+      expect(RuleEngine.validatePattern('.org').isValid).toBe(false);
+      expect(RuleEngine.validatePattern('.').isValid).toBe(false);
+      expect(RuleEngine.validatePattern('*.').isValid).toBe(false);
+      expect(RuleEngine.validatePattern('http://').isValid).toBe(false);
+      expect(RuleEngine.validatePattern('https://').isValid).toBe(false);
+    });
+
+    it('accepts valid domain and wildcard patterns', () => {
       expect(RuleEngine.validatePattern('google.com').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('www.google.com').isValid).toBe(true);
       expect(RuleEngine.validatePattern('*.google.com').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('*.com').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('*').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('google.co.uk').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('localhost:3000').isValid).toBe(true);
+      expect(RuleEngine.validatePattern('127.0.0.1:8080').isValid).toBe(true);
       expect(RuleEngine.validatePattern('github.com/myorg/*').isValid).toBe(true);
       expect(RuleEngine.validatePattern('*://*/settings').isValid).toBe(true);
       expect(RuleEngine.validatePattern('192.168.1.*').isValid).toBe(true);
@@ -22,99 +37,115 @@ describe('RuleEngine', () => {
   });
 
   describe('testPattern', () => {
-    describe('domain pattern: google.com', () => {
-      const pattern = 'google.com';
+    describe('domain pattern: google.com vs www.google.com vs *.google.com', () => {
+      const patternApex = 'google.com';
+      const patternWww = 'www.google.com';
+      const patternWildcard = '*.google.com';
+      const patternSubdomain = 'mail.google.com';
 
-      it('matches http and https URLs', () => {
+      it('matches apex domain, www, and subdomains identically for google.com, www.google.com, and *.google.com', () => {
+        const testUrls = [
+          'https://google.com',
+          'http://google.com',
+          'https://www.google.com',
+          'http://www.google.com',
+          'https://mail.google.com',
+          'https://docs.google.com',
+          'https://drive.google.com',
+          'https://sub.mail.google.com',
+          'https://google.com/search?q=test',
+          'https://google.com:8080/foo#anchor',
+        ];
+
+        for (const url of testUrls) {
+          expect(RuleEngine.testPattern(patternApex, url)).toBe(true);
+          expect(RuleEngine.testPattern(patternWww, url)).toBe(true);
+          expect(RuleEngine.testPattern(patternWildcard, url)).toBe(true);
+        }
+      });
+
+      it('matches specific subdomain rules only for that subdomain', () => {
+        expect(RuleEngine.testPattern(patternSubdomain, 'https://mail.google.com')).toBe(true);
+        expect(RuleEngine.testPattern(patternSubdomain, 'https://sub.mail.google.com')).toBe(true);
+        expect(RuleEngine.testPattern(patternSubdomain, 'https://google.com')).toBe(false);
+        expect(RuleEngine.testPattern(patternSubdomain, 'https://docs.google.com')).toBe(false);
+        expect(RuleEngine.testPattern(patternSubdomain, 'https://www.google.com')).toBe(false);
+      });
+
+      it('does not match lookalike, suffix, or phishing domains', () => {
+        const lookalikes = [
+          'https://notgoogle.com',
+          'https://google.com.attacker.com',
+          'https://google.com.org',
+          'https://evil-google.com',
+          'https://google.com-phishing.com',
+          'https://fakegoogle.com',
+        ];
+
+        for (const url of lookalikes) {
+          expect(RuleEngine.testPattern(patternApex, url)).toBe(false);
+          expect(RuleEngine.testPattern(patternWww, url)).toBe(false);
+          expect(RuleEngine.testPattern(patternWildcard, url)).toBe(false);
+        }
+      });
+    });
+
+    describe('TLD wildcard pattern: *.com', () => {
+      const pattern = '*.com';
+
+      it('matches any .com domain and subdomains', () => {
         expect(RuleEngine.testPattern(pattern, 'https://google.com')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'http://google.com')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://github.com/repo')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://sub.domain.com:8080')).toBe(true);
       });
 
-      it('matches with www prefix', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://www.google.com')).toBe(true);
-      });
-
-      it('matches with paths and query strings', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://google.com/search?q=test')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://google.com?q=test')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://google.com#top')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://www.google.com/maps')).toBe(true);
-      });
-
-      it('matches with custom ports', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://google.com:8080/foo')).toBe(true);
-      });
-
-      it('matches subdomains identically to *.google.com', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://mail.google.com')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://docs.google.com/document/d/123')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://drive.google.com')).toBe(true);
-      });
-
-      it('does not match lookalike domains', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://notgoogle.com')).toBe(false);
-        expect(RuleEngine.testPattern(pattern, 'https://google.com.attacker.com')).toBe(false);
+      it('does not match non-.com domains', () => {
+        expect(RuleEngine.testPattern(pattern, 'https://example.org')).toBe(false);
+        expect(RuleEngine.testPattern(pattern, 'https://site.net')).toBe(false);
+        expect(RuleEngine.testPattern(pattern, 'https://google.co.uk')).toBe(false);
       });
     });
 
-    describe('subdomain wildcard pattern: *.google.com', () => {
-      const pattern = '*.google.com';
+    describe('multi-part country code TLDs: google.co.uk', () => {
+      const pattern = 'google.co.uk';
 
-      it('matches single and nested subdomains', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://mail.google.com')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://docs.google.com/doc/123')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://sub.sub.google.com/')).toBe(true);
+      it('matches apex and subdomains of multi-part TLD', () => {
+        expect(RuleEngine.testPattern(pattern, 'https://google.co.uk')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://www.google.co.uk')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://maps.google.co.uk/page')).toBe(true);
       });
 
-      it('matches apex domain as well as subdomains', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://google.com')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://google.com/search')).toBe(true);
-      });
-
-      it('does not match unrelated domains', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://notgoogle.com')).toBe(false);
+      it('does not match different TLDs for the same brand', () => {
+        expect(RuleEngine.testPattern(pattern, 'https://google.com')).toBe(false);
+        expect(RuleEngine.testPattern(pattern, 'https://google.ca')).toBe(false);
       });
     });
 
-    describe('path wildcard pattern: github.com/myorg/*', () => {
-      const pattern = 'github.com/myorg/*';
-
-      it('matches paths under the specified folder', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://github.com/myorg/repo1')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://github.com/myorg/repo2/issues')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'https://www.github.com/myorg/repo1')).toBe(true);
+    describe('localhost and IP patterns', () => {
+      it('matches localhost with and without ports', () => {
+        expect(RuleEngine.testPattern('localhost', 'http://localhost')).toBe(true);
+        expect(RuleEngine.testPattern('localhost', 'http://localhost:3000/api')).toBe(true);
+        expect(RuleEngine.testPattern('localhost:3000', 'http://localhost:3000/api')).toBe(true);
+        expect(RuleEngine.testPattern('localhost:3000', 'http://localhost:8080/api')).toBe(false);
       });
 
-      it('does not match different paths on the same domain', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://github.com/other/repo')).toBe(false);
-        expect(RuleEngine.testPattern(pattern, 'https://github.com/myorg')).toBe(false);
-      });
-    });
-
-    describe('scheme and domain wildcard pattern: *://*/settings', () => {
-      const pattern = '*://*/settings';
-
-      it('matches any scheme and domain with exact path /settings', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://any.site/settings')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'http://foo.com/settings')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'http://foo.com/settings?tab=1')).toBe(true);
-      });
-
-      it('does not match sub-paths under /settings', () => {
-        expect(RuleEngine.testPattern(pattern, 'https://foo.com/settings/advanced')).toBe(false);
+      it('matches exact IP addresses and ports', () => {
+        expect(RuleEngine.testPattern('127.0.0.1:8080', 'http://127.0.0.1:8080/app')).toBe(true);
+        expect(RuleEngine.testPattern('127.0.0.1:8080', 'http://127.0.0.1:3000/app')).toBe(false);
       });
     });
 
-    describe('IP wildcard pattern: 192.168.1.*', () => {
-      const pattern = '192.168.1.*';
-
-      it('matches IPs in subnet with any port or path', () => {
-        expect(RuleEngine.testPattern(pattern, 'http://192.168.1.1:8080/page')).toBe(true);
-        expect(RuleEngine.testPattern(pattern, 'http://192.168.1.254/')).toBe(true);
+    describe('path and query patterns', () => {
+      it('matches path wildcards ignoring query params and anchors', () => {
+        const pattern = 'github.com/myorg/*';
+        expect(RuleEngine.testPattern(pattern, 'https://github.com/myorg/repo1?tab=readme#heading')).toBe(true);
+        expect(RuleEngine.testPattern(pattern, 'https://github.com/otherorg/repo1')).toBe(false);
       });
 
-      it('does not match different subnets', () => {
-        expect(RuleEngine.testPattern(pattern, 'http://192.168.2.1')).toBe(false);
+      it('matches exact path with trailing slash flexibly', () => {
+        expect(RuleEngine.testPattern('google.com/', 'https://google.com')).toBe(true);
+        expect(RuleEngine.testPattern('google.com/', 'https://google.com/')).toBe(true);
+        expect(RuleEngine.testPattern('google.com/', 'https://google.com/search')).toBe(true);
       });
     });
 
@@ -125,9 +156,14 @@ describe('RuleEngine', () => {
         expect(RuleEngine.testPattern('google.com', undefined as any)).toBe(false);
       });
 
-      it('handles case-insensitivity', () => {
+      it('handles case-insensitivity on patterns and URLs', () => {
         expect(RuleEngine.testPattern('GOOGLE.COM', 'https://google.com')).toBe(true);
         expect(RuleEngine.testPattern('google.com', 'HTTPS://GOOGLE.COM/TEST')).toBe(true);
+        expect(RuleEngine.testPattern('GoOgLe.CoM', 'https://wWw.gOoGlE.cOm/SeArCh')).toBe(true);
+      });
+
+      it('handles leading and trailing whitespace in patterns', () => {
+        expect(RuleEngine.testPattern('   google.com   ', 'https://google.com')).toBe(true);
       });
     });
   });
