@@ -51,6 +51,10 @@ module.exports = (env, argv) => {
             to: "manifest.json",
           },
           {
+            from: "icons",
+            to: "icons",
+          },
+          {
             from: "icon.png",
             to: "icon.png",
           },

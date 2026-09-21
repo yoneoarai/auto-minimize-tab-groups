@@ -46,11 +46,25 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       expect(chromeManifest.options_ui.open_in_tab).toBe(true);
     });
 
-    it('has identical action popup configuration and icon definitions', () => {
+    it('has identical action popup configuration and icon definitions adhering to browser standards', () => {
       expect(chromeManifest.action.default_popup).toBe(firefoxManifest.action.default_popup);
       expect(chromeManifest.action.default_title).toBe(firefoxManifest.action.default_title);
       expect(chromeManifest.action.default_icon).toEqual(firefoxManifest.action.default_icon);
       expect(chromeManifest.icons).toEqual(firefoxManifest.icons);
+
+      // Verify all required standard icon sizes (16, 32, 48, 128) exist on disk
+      const standardSizes = ['16', '32', '48', '128'];
+      for (const size of standardSizes) {
+        expect(chromeManifest.icons[size]).toBeDefined();
+        const iconPath = path.resolve(__dirname, '..', chromeManifest.icons[size]);
+        expect(fs.existsSync(iconPath)).toBe(true);
+      }
+
+      for (const size of ['16', '32', '48']) {
+        expect(chromeManifest.action.default_icon[size]).toBeDefined();
+        const iconPath = path.resolve(__dirname, '..', chromeManifest.action.default_icon[size]);
+        expect(fs.existsSync(iconPath)).toBe(true);
+      }
     });
 
     it('enforces required browser-specific platform declarations', () => {
