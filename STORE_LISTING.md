@@ -3,9 +3,9 @@
 ---
 
 ## Short Description (Chrome Web Store & Firefox AMO Summary)
-**Character count:** ~104 characters (Max 132 for Chrome, 250 for Firefox)
+**Character count:** 96 characters (Max 132 for Chrome, 250 for Firefox)
 ```text
-Automatically organize tabs into groups with URL rules and customize auto-minimize behavior.
+Automatically group tabs by URL rules and collapse inactive tab groups to keep your browser organized.
 ```
 
 ---
@@ -13,74 +13,39 @@ Automatically organize tabs into groups with URL rules and customize auto-minimi
 ## Full Store Description (Chrome Web Store & Firefox Add-ons)
 
 ```text
-🎉 What's New in v1.1.0 — Tabbi: The Complete Tab Grouping & Minimization Suite!
-Formerly known as "Auto Minimize Tab Groups", version 1.1.0 is a massive upgrade! You no longer need separate extensions for auto-grouping and auto-minimizing — Tabbi now does both seamlessly in one lightweight, privacy-friendly extension.
+New in v1.1.0: Built-in automatic tab grouping! You no longer need a separate extension to create tab groups. Tabbi now groups your tabs using custom URL rules and minimizes inactive groups automatically.
 
-==================================================
+Tabbi keeps your browser organized and clutter-free. It sorts your tabs into named, color-coded groups based on your URL rules, and automatically collapses inactive groups so your tab strip stays clean and readable.
 
-Keep your browser clean, organized, and lightning fast. Tabbi automatically organizes your tabs into named, color-coded tab groups using customizable URL pattern rules, while intelligently minimizing (collapsing) inactive groups to declutter your tab strip.
+Top Features:
 
-Whether you juggle dozens of tabs for development, research, project management, or casual browsing, Tabbi runs silently in the background to maintain an immaculate workspace.
+Automatic Tab Grouping
+Create custom rules to automatically sort tabs into named, colored groups based on domain, subdomain, wildcard (*), or URL path. New tabs are grouped instantly as you browse.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✨ KEY FEATURES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Smart Auto-Minimizing
+Inactive tab groups automatically collapse after a set timeout (default: 30 seconds). Groups containing your active tab always stay open so your current work is never interrupted.
 
-🚀 AUTOMATIC TAB GROUPING
-Define flexible URL pattern rules to automatically organize new and existing tabs into custom-named, color-coded groups.
-• Supports wildcards (*), domains, subdomains, protocols, and URL paths.
-• Exact domain boundary protection prevents accidental matching of lookalike/phishing domains.
-• First-match priority engine lets you customize the exact evaluation order of your rules.
-• Live interactive pattern tester in Settings to preview rule matching in real time.
+Per-Group Customization
+Set individual collapse timeouts for each group, or disable auto-collapsing entirely for groups you want to keep open permanently (such as Work, Docs, or Dashboard).
 
-⏱️ SMART AUTO-MINIMIZATION (PER-GROUP TIMEOUTS)
-Automatically collapses inactive tab groups after a customizable inactivity timeout (default: 30 seconds).
-• Custom Per-Group Behavior: Keep essential groups (like GitHub, Docs, or Jira) permanently open, while setting aggressive 5-second auto-minimization for social media or news.
-• Active Tab Protection: Groups containing your currently active tab in the focused window NEVER minimize while you work.
+One-Click Pause
+Working across several tab groups at once? Pause auto-collapsing anytime from the popup or with a keyboard shortcut (Alt+Shift+P on Windows/Linux, Ctrl+Shift+P on macOS).
 
-⏸️ ONE-CLICK PAUSE AUTO-COLLAPSE
-Need to compare information across multiple groups without them collapsing?
-• Pause auto-collapse anytime with a single click in the popup or using the global shortcut (Alt+Shift+P / Ctrl+Shift+P).
-• Visual status indicator: Extension toolbar icon dynamically updates with a pause badge so you always know when auto-minimization is paused.
+Catch-All Fallback Group
+Choose what happens to tabs that don't match any specific rule: leave them ungrouped or route them into a customizable fallback group. You can reorder the fallback group anywhere in your tab strip.
 
-📥 CATCH-ALL FALLBACK GROUP
-Decide what happens to tabs that don't match any of your custom rules:
-• Leave them ungrouped, or
-• Automatically route them into a customizable "General" fallback group.
-• Reorder the fallback group anywhere in your tab strip and assign custom evaluation priorities.
+Clean Tab Strip Ordering
+Choose between manual ordering (drag and drop your rules in settings to define group order) or alphabetical ordering. Newly created groups are placed into position immediately instead of sticking to the end.
 
-📐 INTELLIGENT TAB STRIP ORDERING
-Keep your tab strip perfectly organized in the order you want:
-• Manual Ordering: Drag and drop rules in settings to define the exact sequence of tab groups on your tab strip.
-• Alphabetical Ordering: Automatically sorts tab groups A-to-Z.
-• Instant Positioning: Newly created groups are instantly placed into their proper position in the tab strip.
+Respects Manual Overrides
+If you manually drag a tab to a different group, Tabbi respects your move and won't reassign it until you navigate to a new URL.
 
-🔄 RESPECTS MANUAL OVERRIDES
-Manually dragged a tab to a different group? Tabbi honors your decision and won't fight you — manual tab moves are preserved until the tab navigates to a new URL.
+Privacy-First & Lightweight
+Tabbi runs 100% locally on your machine. No accounts, no analytics, no tracking, and no external server requests. Your settings and rules are saved locally and persist safely across updates.
 
-💻 MODERN POPUP & OPTIONS DASHBOARD
-• Quick-Access Popup: Toggle Tabbi on/off, toggle pause, inspect live active groups and rules counters, and quickly jump to settings.
-• Advanced Options Dashboard: Effortlessly manage rules, colors, timeouts, ordering, and priorities.
-• JSON Backup & Migration: Export and import your entire configuration with one click.
-• Seamless Dark Mode: Fully responsive interface that adapts to your system theme.
+Shortcut:
+Alt + Shift + P (Windows/Linux) or Ctrl + Shift + P (macOS) to toggle pause. Customizable in your browser's shortcut settings.
 
-🔒 100% PRIVATE & OFFLINE
-• No tracking, no telemetry, no analytics, and zero external network calls.
-• Runs entirely locally on your device.
-• Your settings, rules, and configurations persist safely across all extension updates.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⌨️ KEYBOARD SHORTCUTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Windows & Linux: Alt + Shift + P
-• macOS: Ctrl + Shift + P
-(Toggle "Pause auto-collapse" on the fly — customizable anytime via chrome://extensions/shortcuts or about:addons)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌐 CROSS-BROWSER SUPPORT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Tabbi is available with 100% feature and design parity on both Google Chrome and Mozilla Firefox (138+).
-
-Open-source and actively maintained. Have feedback, feature requests, or questions? Check out our GitHub repository:
+Open-source on GitHub:
 https://github.com/yoneoarai/auto-minimize-tab-groups
 ```
