@@ -178,8 +178,16 @@ export class RuleEngine {
       return null;
     }
 
-    // Rules are evaluated strictly by ascending order / priority (Priority 1 first)
-    const sortedRules = [...rules].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    // Rules are evaluated strictly by ascending priority (Priority 1 first).
+    // If priorities are equal, ties are broken by ascending tab strip order.
+    const sortedRules = [...rules].sort((a, b) => {
+      const prioA = typeof a.priority === 'number' ? a.priority : (a.order ?? 0) + 1;
+      const prioB = typeof b.priority === 'number' ? b.priority : (b.order ?? 0) + 1;
+      if (prioA !== prioB) {
+        return prioA - prioB;
+      }
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
     for (const rule of sortedRules) {
       if (!rule.patterns || rule.patterns.length === 0) {
         continue;

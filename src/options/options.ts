@@ -152,22 +152,24 @@ function renderRulesList(): void {
       collapseBadge = `Collapse: ${Math.round(rule.collapse.timeoutMs / 1000)}s`;
     }
 
-    const priorityNum = index + 1;
+    const positionNum = index + 1;
+    const priorityNum = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? index) + 1;
     const isFirst = index === 0;
     const isLast = index === rules.length - 1;
 
     item.innerHTML = `
       <div class="rule-left">
         <div class="priority-controls">
-          <button class="move-btn move-up-btn" title="Move Up (Higher Priority)" ${isFirst ? 'disabled' : ''}>▲</button>
-          <button class="move-btn move-down-btn" title="Move Down (Lower Priority)" ${isLast ? 'disabled' : ''}>▼</button>
+          <button class="move-btn move-up-btn" title="Move Left in Tab Strip" ${isFirst ? 'disabled' : ''}>▲</button>
+          <button class="move-btn move-down-btn" title="Move Right in Tab Strip" ${isLast ? 'disabled' : ''}>▼</button>
         </div>
-        <span class="drag-handle" title="Drag to reorder">≡</span>
+        <span class="drag-handle" title="Drag to reorder tab strip position">≡</span>
         <div class="color-dot color-${rule.color}"></div>
         <div class="rule-info">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span class="rule-name"></span>
-            <span class="priority-badge ${index === 0 ? 'p1' : ''}">Priority ${priorityNum}</span>
+            <span class="order-badge" title="Position #${positionNum} in browser tab strip">Pos ${positionNum}</span>
+            <span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>
           </div>
           <span class="rule-patterns"></span>
           <span class="rule-badge">${collapseBadge}</span>
@@ -214,22 +216,22 @@ function renderRulesList(): void {
         (el) => (el as HTMLElement).dataset.id!
       );
       await configManager.reorderRules(updatedIds);
-      showToast('Rules reordered');
+      showToast('Tab group order updated');
     });
 
-    // Priority move buttons
+    // Reorder move buttons
     item.querySelector('.move-up-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       await configManager.moveRule(rule.id, 'up');
       renderRulesList();
-      showToast(`Moved "${rule.name}" up`);
+      showToast(`Moved "${rule.name}" left`);
     });
 
     item.querySelector('.move-down-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       await configManager.moveRule(rule.id, 'down');
       renderRulesList();
-      showToast(`Moved "${rule.name}" down`);
+      showToast(`Moved "${rule.name}" right`);
     });
 
     // Action buttons
@@ -280,6 +282,7 @@ function openRuleDialog(rule?: GroupRule): void {
   updateTesterResult();
 
   const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
+  const orderInput = document.getElementById('rule-order-input') as HTMLInputElement;
   const existingRules = configManager.getRules();
 
   if (rule) {
@@ -290,11 +293,18 @@ function openRuleDialog(rule?: GroupRule): void {
     currentModalPatterns = [...rule.patterns];
 
     if (priorityInput) {
-      const currentIdx = existingRules.findIndex((r) => r.id === rule.id);
-      const prio = currentIdx !== -1 ? currentIdx + 1 : (rule.order ?? 0) + 1;
+      const prio = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? 0) + 1;
       priorityInput.value = String(prio);
       priorityInput.min = '1';
-      priorityInput.max = String(Math.max(1, existingRules.length));
+      priorityInput.removeAttribute('max');
+    }
+
+    if (orderInput) {
+      const currentIdx = existingRules.findIndex((r) => r.id === rule.id);
+      const pos = currentIdx !== -1 ? currentIdx + 1 : (rule.order ?? 0) + 1;
+      orderInput.value = String(pos);
+      orderInput.min = '1';
+      orderInput.max = String(Math.max(1, existingRules.length));
     }
 
     if (!rule.collapse.enabled) {
@@ -317,10 +327,15 @@ function openRuleDialog(rule?: GroupRule): void {
       customTimeoutInput.value = '5';
     }
     if (priorityInput) {
-      const nextPriority = existingRules.length + 1;
-      priorityInput.value = String(nextPriority);
+      priorityInput.value = '1';
       priorityInput.min = '1';
-      priorityInput.max = String(nextPriority);
+      priorityInput.removeAttribute('max');
+    }
+    if (orderInput) {
+      const nextPos = existingRules.length + 1;
+      orderInput.value = String(nextPos);
+      orderInput.min = '1';
+      orderInput.max = String(nextPos);
     }
     (document.querySelector('input[name="rule-collapse"][value="default"]') as HTMLInputElement).checked = true;
   }
@@ -735,7 +750,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
     const priorityVal = parseInt(priorityInput?.value || '1', 10);
-    const targetOrder = !isNaN(priorityVal) && priorityVal >= 1 ? priorityVal - 1 : undefined;
+    const targetPriority = !isNaN(priorityVal) && priorityVal >= 1 ? priorityVal : 1;
+
+    const orderInput = document.getElementById('rule-order-input') as HTMLInputElement;
+    const orderVal = parseInt(orderInput?.value || '1', 10);
+    const targetOrder = !isNaN(orderVal) && orderVal >= 1 ? orderVal - 1 : undefined;
 
     try {
       if (activeEditingRuleId) {
@@ -744,6 +763,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           color: currentModalColor,
           patterns: currentModalPatterns,
           collapse,
+          priority: targetPriority,
           order: targetOrder,
         });
         showToast(`Rule "${name}" updated`);
@@ -753,6 +773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           color: currentModalColor,
           patterns: currentModalPatterns,
           collapse,
+          priority: targetPriority,
           order: targetOrder,
         });
         showToast(`Rule "${name}" created`);

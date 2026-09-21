@@ -177,6 +177,7 @@ describe('RuleEngine', () => {
         patterns: ['*.google.com', 'google.com'],
         collapse: { enabled: true, timeoutMs: 30000 },
         order: 1,
+        priority: 2,
       },
       {
         id: 'rule-github-work',
@@ -184,7 +185,8 @@ describe('RuleEngine', () => {
         color: 'purple',
         patterns: ['github.com/myorg/*'],
         collapse: { enabled: false, timeoutMs: null },
-        order: 0, // Higher priority due to lower order number
+        order: 0,
+        priority: 1, // Higher priority due to lower priority number
       },
       {
         id: 'rule-github-general',
@@ -193,22 +195,77 @@ describe('RuleEngine', () => {
         patterns: ['github.com'],
         collapse: { enabled: true, timeoutMs: 15000 },
         order: 2,
+        priority: 3,
       },
     ];
 
-    it('matches rule with highest priority (lower order value)', () => {
+    it('matches rule with highest priority (lower priority value)', () => {
       const result = RuleEngine.matchUrlWithDetail('https://github.com/myorg/project', rules);
       expect(result).not.toBeNull();
       expect(result!.rule.id).toBe('rule-github-work');
       expect(result!.matchedPattern).toBe('github.com/myorg/*');
     });
 
-    it('evaluates by rule.order priority even if rules array is unsorted', () => {
-      // Pass rules in reverse order: general (order 2) before work (order 0)
+    it('evaluates by rule.priority even if rules array is unsorted', () => {
+      // Pass rules in reverse order: general (priority 3) before work (priority 1)
       const reversedRules = [rules[2], rules[0], rules[1]];
       const result = RuleEngine.matchUrlWithDetail('https://github.com/myorg/project', reversedRules);
       expect(result).not.toBeNull();
       expect(result!.rule.id).toBe('rule-github-work');
+    });
+
+    it('evaluates by priority even when lower-priority rule has a lower tab strip order', () => {
+      const decoupledRules: GroupRule[] = [
+        {
+          id: 'rule-general',
+          name: 'General GitHub',
+          color: 'grey',
+          patterns: ['github.com/*'],
+          collapse: { enabled: true, timeoutMs: null },
+          order: 0, // Appears first in tab strip
+          priority: 2, // Evaluated second
+        },
+        {
+          id: 'rule-specific',
+          name: 'Org Specific',
+          color: 'purple',
+          patterns: ['github.com/myorg/*'],
+          collapse: { enabled: true, timeoutMs: null },
+          order: 5, // Appears sixth in tab strip
+          priority: 1, // Evaluated first
+        },
+      ];
+
+      const result = RuleEngine.matchUrlWithDetail('https://github.com/myorg/repo', decoupledRules);
+      expect(result).not.toBeNull();
+      expect(result!.rule.id).toBe('rule-specific');
+    });
+
+    it('falls back to order tie-breaking when rules have the same priority', () => {
+      const tiedRules: GroupRule[] = [
+        {
+          id: 'rule-second',
+          name: 'Second',
+          color: 'blue',
+          patterns: ['example.com/*'],
+          collapse: { enabled: true, timeoutMs: null },
+          order: 1,
+          priority: 1,
+        },
+        {
+          id: 'rule-first',
+          name: 'First',
+          color: 'green',
+          patterns: ['example.com/*'],
+          collapse: { enabled: true, timeoutMs: null },
+          order: 0,
+          priority: 1,
+        },
+      ];
+
+      const result = RuleEngine.matchUrlWithDetail('https://example.com/page', tiedRules);
+      expect(result).not.toBeNull();
+      expect(result!.rule.id).toBe('rule-first');
     });
 
     it('falls back to lower priority rule when higher priority does not match', () => {

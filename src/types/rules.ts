@@ -44,5 +44,6 @@ export interface GroupRule {
     enabled: boolean;
     timeoutMs: number | null; // null indicates using default timeout
   };
-  order: number;
+  order: number; // 0-indexed order for browser tab strip positioning and list sequencing
+  priority: number; // 1-based evaluation priority for pattern matching (1 = highest precedence)
 }

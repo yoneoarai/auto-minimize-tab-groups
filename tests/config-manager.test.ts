@@ -439,6 +439,79 @@ describe('ConfigManager', () => {
       rules = configManager.getRules();
       expect(rules.map((r) => r.name)).toEqual(['First', 'Third', 'Second']);
     });
+
+    it('preserves independent priority when reordering rules', async () => {
+      const r1 = await configManager.addRule({
+        name: 'Work',
+        color: 'blue',
+        patterns: ['work.com'],
+        collapse: { enabled: true, timeoutMs: null },
+        priority: 1,
+      });
+      const r2 = await configManager.addRule({
+        name: 'Personal',
+        color: 'green',
+        patterns: ['personal.com'],
+        collapse: { enabled: true, timeoutMs: null },
+        priority: 5,
+      });
+
+      // Reorder in tab strip so Personal is first (order 0) and Work is second (order 1)
+      await configManager.reorderRules([r2.id, r1.id]);
+
+      const rules = configManager.getRules();
+      const personal = rules.find((r) => r.id === r2.id)!;
+      const work = rules.find((r) => r.id === r1.id)!;
+
+      expect(personal.order).toBe(0);
+      expect(personal.priority).toBe(5); // Priority remains 5
+
+      expect(work.order).toBe(1);
+      expect(work.priority).toBe(1); // Priority remains 1
+    });
+
+    it('allows updating priority independently from order', async () => {
+      const r = await configManager.addRule({
+        name: 'Docs',
+        color: 'yellow',
+        patterns: ['docs.google.com'],
+        collapse: { enabled: true, timeoutMs: null },
+        priority: 3,
+        order: 0,
+      });
+
+      await configManager.updateRule(r.id, { priority: 1 });
+
+      const updated = configManager.getRuleById(r.id)!;
+      expect(updated.priority).toBe(1);
+      expect(updated.order).toBe(0);
+    });
+
+    it('validates priority in validateRule', () => {
+      const valid = ConfigManager.validateRule({
+        name: 'Valid',
+        color: 'blue',
+        patterns: ['valid.com'],
+        priority: 2,
+      });
+      expect(valid.isValid).toBe(true);
+
+      const invalidZero = ConfigManager.validateRule({
+        name: 'Invalid Zero',
+        color: 'blue',
+        patterns: ['valid.com'],
+        priority: 0,
+      });
+      expect(invalidZero.isValid).toBe(false);
+
+      const invalidFloat = ConfigManager.validateRule({
+        name: 'Invalid Float',
+        color: 'blue',
+        patterns: ['valid.com'],
+        priority: 1.5,
+      });
+      expect(invalidFloat.isValid).toBe(false);
+    });
   });
 
   describe('Extension Settings', () => {

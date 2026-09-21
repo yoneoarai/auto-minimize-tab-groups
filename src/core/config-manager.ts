@@ -125,6 +125,18 @@ export class ConfigManager {
       }
     }
 
+    if (rule.priority !== undefined) {
+      if (typeof rule.priority !== 'number' || !Number.isInteger(rule.priority) || rule.priority < 1) {
+        return { isValid: false, errorMessage: 'Priority must be an integer of 1 or greater.' };
+      }
+    }
+
+    if (rule.order !== undefined) {
+      if (typeof rule.order !== 'number' || !Number.isInteger(rule.order) || rule.order < 0) {
+        return { isValid: false, errorMessage: 'Order must be a non-negative integer.' };
+      }
+    }
+
     return { isValid: true };
   }
 
@@ -201,6 +213,10 @@ export class ConfigManager {
                     : null,
               },
               order: typeof r.order === 'number' ? r.order : idx,
+              priority:
+                typeof r.priority === 'number' && Number.isInteger(r.priority) && r.priority >= 1
+                  ? r.priority
+                  : (typeof r.order === 'number' ? r.order + 1 : idx + 1),
             });
           }
         }
@@ -335,12 +351,16 @@ export class ConfigManager {
    * Adds a new group rule.
    */
   public async addRule(
-    ruleData: Omit<GroupRule, 'id' | 'order'> & { id?: string; order?: number }
+    ruleData: Omit<GroupRule, 'id' | 'order' | 'priority'> & { id?: string; order?: number; priority?: number }
   ): Promise<GroupRule> {
     const existingRules = this.getRules();
     let targetOrder = typeof ruleData.order === 'number' && ruleData.order >= 0
       ? Math.min(ruleData.order, existingRules.length)
       : existingRules.length;
+
+    let targetPriority = typeof ruleData.priority === 'number' && ruleData.priority >= 1
+      ? Math.floor(ruleData.priority)
+      : 1;
 
     const newRule: GroupRule = {
       id: ruleData.id || generateRuleId(),
@@ -352,6 +372,7 @@ export class ConfigManager {
         timeoutMs: ruleData.collapse?.timeoutMs ?? null,
       },
       order: targetOrder,
+      priority: targetPriority,
     };
 
     const validation = ConfigManager.validateRule(newRule);
@@ -393,6 +414,7 @@ export class ConfigManager {
         enabled: updates.collapse?.enabled ?? existing.collapse.enabled,
         timeoutMs: updates.collapse?.timeoutMs !== undefined ? updates.collapse.timeoutMs : existing.collapse.timeoutMs,
       },
+      priority: updates.priority !== undefined ? updates.priority : existing.priority,
     };
 
     const validation = ConfigManager.validateRule(updated);
@@ -417,7 +439,7 @@ export class ConfigManager {
   }
 
   /**
-   * Moves a rule up (higher priority) or down (lower priority).
+   * Moves a rule up or down in tab strip ordering.
    */
   public async moveRule(id: string, direction: 'up' | 'down'): Promise<void> {
     const rules = this.getRules();

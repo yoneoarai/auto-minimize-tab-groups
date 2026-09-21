@@ -47,6 +47,12 @@
         color: #d2e3fc !important;
       }
 
+      .order-badge {
+        background-color: #283142 !important;
+        color: #8ab4f8 !important;
+        border-color: #3b5998 !important;
+      }
+
       .rule-badge {
         background-color: #3c4043 !important;
         color: #9aa0a6 !important;
@@ -393,6 +399,19 @@
       border: 1px solid #ceead6;
     }
 
+    .order-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 12px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      border: 1px solid #d2e3fc;
+      letter-spacing: 0.2px;
+    }
+
     .fallback-badge {
       display: inline-flex;
       align-items: center;
@@ -646,7 +665,7 @@
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
         <div>
           <div class="card-title">Group Rules</div>
-          <div class="card-subtitle" style="margin-bottom: 0;">Tabs matching these patterns will be automatically organized into groups. Evaluated by priority (Priority 1 = Highest, first match wins). Use ▲/▼ buttons or drag to reorder.</div>
+          <div class="card-subtitle" style="margin-bottom: 0;">Tabs matching these patterns will be automatically organized into groups. Evaluated by Priority (1 = Highest, first match wins). Reorder via drag & drop or ▲/▼ to arrange tab groups from left to right in the browser.</div>
         </div>
         <button id="add-rule-btn" class="btn btn-primary btn-sm">+ Add Rule</button>
       </div>
@@ -764,10 +783,17 @@
         <div id="rule-color-picker" class="color-picker-grid"></div>
       </div>
 
-      <div class="form-group" style="max-width: 200px;">
-        <label for="rule-priority-input">Priority (1 = Highest)</label>
-        <input type="number" id="rule-priority-input" min="1" value="1" required>
-        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Lower numbers take evaluation precedence.</span>
+      <div style="display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;">
+        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+          <label for="rule-priority-input">Rule Priority (1 = Highest)</label>
+          <input type="number" id="rule-priority-input" min="1" value="1" required>
+          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Matching precedence (1 = tested first).</span>
+        </div>
+        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+          <label for="rule-order-input">Tab Strip Position</label>
+          <input type="number" id="rule-order-input" min="1" value="1" required>
+          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Browser group position (1 = leftmost).</span>
+        </div>
       </div>
 
       <div class="form-group">
