@@ -95,13 +95,15 @@ export class ConfigManager {
       return { isValid: false, errorMessage: `Invalid group color: ${rule.color}.` };
     }
 
-    if (!Array.isArray(rule.patterns) || rule.patterns.length === 0) {
-      return { isValid: false, errorMessage: 'Rule must contain at least one URL pattern.' };
-    }
+    if (!rule.isFallback) {
+      if (!Array.isArray(rule.patterns) || rule.patterns.length === 0) {
+        return { isValid: false, errorMessage: 'Rule must contain at least one URL pattern.' };
+      }
 
-    for (const pattern of rule.patterns) {
-      if (typeof pattern !== 'string' || !pattern.trim()) {
-        return { isValid: false, errorMessage: 'URL patterns cannot be empty strings.' };
+      for (const pattern of rule.patterns) {
+        if (typeof pattern !== 'string' || !pattern.trim()) {
+          return { isValid: false, errorMessage: 'URL patterns cannot be empty strings.' };
+        }
       }
     }
 
@@ -194,17 +196,24 @@ export class ConfigManager {
     );
 
     const rules: GroupRule[] = [];
+    let hasFallbackRule = false;
+
     if (Array.isArray(data.rules)) {
       data.rules.forEach((r: any, idx: number) => {
-        if (r && typeof r === 'object' && r.name && Array.isArray(r.patterns)) {
+        if (r && typeof r === 'object' && r.name) {
           const color: TabGroupColor = TAB_GROUP_COLORS.includes(r.color) ? r.color : 'grey';
-          const validPatterns = r.patterns.filter((p: any) => typeof p === 'string' && p.trim().length > 0);
-          if (validPatterns.length > 0) {
+          const isFallback = Boolean(r.isFallback);
+          const validPatterns = Array.isArray(r.patterns)
+            ? r.patterns.filter((p: any) => typeof p === 'string' && p.trim().length > 0)
+            : [];
+
+          if (isFallback || validPatterns.length > 0) {
+            if (isFallback) hasFallbackRule = true;
             rules.push({
-              id: typeof r.id === 'string' && r.id ? r.id : generateRuleId(),
+              id: typeof r.id === 'string' && r.id ? r.id : (isFallback ? 'catch-all-fallback' : generateRuleId()),
               name: String(r.name).trim(),
               color,
-              patterns: validPatterns,
+              patterns: isFallback ? [] : validPatterns,
               collapse: {
                 enabled: typeof r.collapse?.enabled === 'boolean' ? r.collapse.enabled : true,
                 timeoutMs:
@@ -217,21 +226,23 @@ export class ConfigManager {
                 typeof r.priority === 'number' && Number.isInteger(r.priority) && r.priority >= 1
                   ? r.priority
                   : (typeof r.order === 'number' ? r.order + 1 : idx + 1),
+              isFallback: isFallback ? true : undefined,
+              evaluateLast: isFallback ? (r.evaluateLast !== false) : undefined,
             });
           }
         }
       });
     }
 
-    const generalGroupName =
+    let generalGroupName =
       typeof data.generalGroup?.name === 'string' && data.generalGroup.name.trim()
         ? data.generalGroup.name.trim()
         : DEFAULT_GENERAL_GROUP_NAME;
 
-    const generalGroupColor: TabGroupColor =
+    let generalGroupColor: TabGroupColor =
       TAB_GROUP_COLORS.includes(data.generalGroup?.color) ? data.generalGroup.color : 'grey';
 
-    const generalGroupCollapse = {
+    let generalGroupCollapse = {
       enabled:
         typeof data.generalGroup?.collapse?.enabled === 'boolean'
           ? data.generalGroup.collapse.enabled
@@ -242,6 +253,49 @@ export class ConfigManager {
           : null,
     };
 
+    if (data.unmatchedTabBehavior === 'general-group') {
+      if (!hasFallbackRule) {
+        rules.push({
+          id: 'catch-all-fallback',
+          name: generalGroupName,
+          color: generalGroupColor,
+          patterns: [],
+          collapse: generalGroupCollapse,
+          order: typeof (data.generalGroup as any)?.order === 'number' ? (data.generalGroup as any).order : rules.length,
+          priority: typeof (data.generalGroup as any)?.priority === 'number' ? (data.generalGroup as any).priority : rules.length + 1,
+          isFallback: true,
+          evaluateLast: (data.generalGroup as any)?.evaluateLast !== false,
+        });
+      }
+    } else {
+      const fallbackIdx = rules.findIndex((r) => r.isFallback);
+      if (fallbackIdx !== -1) {
+        const [removed] = rules.splice(fallbackIdx, 1);
+        generalGroupName = removed.name;
+        generalGroupColor = removed.color;
+        generalGroupCollapse = removed.collapse;
+      }
+    }
+
+    const fallbackRule = rules.find((r) => r.isFallback);
+    const syncedGeneralGroup = fallbackRule
+      ? {
+          name: fallbackRule.name,
+          color: fallbackRule.color,
+          collapse: fallbackRule.collapse,
+          order: fallbackRule.order,
+          priority: fallbackRule.priority,
+          evaluateLast: fallbackRule.evaluateLast,
+        }
+      : {
+          name: generalGroupName,
+          color: generalGroupColor,
+          collapse: generalGroupCollapse,
+          order: (data.generalGroup as any)?.order,
+          priority: (data.generalGroup as any)?.priority,
+          evaluateLast: (data.generalGroup as any)?.evaluateLast,
+        };
+
     return {
       version: CONFIG_VERSION,
       enabled: typeof data.enabled === 'boolean' ? data.enabled : true,
@@ -250,11 +304,7 @@ export class ConfigManager {
       rules,
       unmatchedTabBehavior:
         data.unmatchedTabBehavior === 'general-group' ? 'general-group' : 'leave-ungrouped',
-      generalGroup: {
-        name: generalGroupName,
-        color: generalGroupColor,
-        collapse: generalGroupCollapse,
-      },
+      generalGroup: syncedGeneralGroup as any,
       groupOrdering: data.groupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
       reorganizeOnRuleChange:
         typeof data.reorganizeOnRuleChange === 'boolean' ? data.reorganizeOnRuleChange : true,
@@ -407,14 +457,18 @@ export class ConfigManager {
       id: existing.id,
       name: updates.name !== undefined ? updates.name.trim() : existing.name,
       patterns:
-        updates.patterns !== undefined
-          ? updates.patterns.map((p) => p.trim()).filter(Boolean)
-          : existing.patterns,
+        existing.isFallback
+          ? []
+          : (updates.patterns !== undefined
+              ? updates.patterns.map((p) => p.trim()).filter(Boolean)
+              : existing.patterns),
       collapse: {
         enabled: updates.collapse?.enabled ?? existing.collapse.enabled,
         timeoutMs: updates.collapse?.timeoutMs !== undefined ? updates.collapse.timeoutMs : existing.collapse.timeoutMs,
       },
       priority: updates.priority !== undefined ? updates.priority : existing.priority,
+      evaluateLast: updates.evaluateLast !== undefined ? updates.evaluateLast : existing.evaluateLast,
+      isFallback: existing.isFallback,
     };
 
     const validation = ConfigManager.validateRule(updated);
@@ -435,6 +489,15 @@ export class ConfigManager {
     });
 
     this.currentConfig.rules = currentRules;
+
+    if (updated.isFallback) {
+      this.currentConfig.generalGroup = {
+        name: updated.name,
+        color: updated.color,
+        collapse: updated.collapse,
+      };
+    }
+
     await this.saveConfig();
   }
 
@@ -470,6 +533,11 @@ export class ConfigManager {
    * Deletes a rule by ID.
    */
   public async deleteRule(id: string): Promise<void> {
+    const existingRule = (this.currentConfig.rules || []).find((r) => r.id === id);
+    if (existingRule?.isFallback) {
+      throw new Error('Cannot delete the catch-all fallback group.');
+    }
+
     const initialLength = (this.currentConfig.rules || []).length;
     this.currentConfig.rules = (this.currentConfig.rules || []).filter((r) => r.id !== id);
 
@@ -541,7 +609,53 @@ export class ConfigManager {
    * Sets unmatched tab behavior.
    */
   public async setUnmatchedBehavior(behavior: 'leave-ungrouped' | 'general-group'): Promise<void> {
+    if (behavior !== 'leave-ungrouped' && behavior !== 'general-group') {
+      throw new Error(`Invalid unmatched tab behavior: ${behavior}`);
+    }
     this.currentConfig.unmatchedTabBehavior = behavior;
+    const currentRules = this.currentConfig.rules || [];
+    const fallbackIdx = currentRules.findIndex((r) => r.isFallback);
+
+    if (behavior === 'general-group') {
+      if (fallbackIdx === -1) {
+        const gen = this.currentConfig.generalGroup || {
+          name: DEFAULT_GENERAL_GROUP_NAME,
+          color: 'grey',
+          collapse: { enabled: true, timeoutMs: null },
+        };
+        const order = typeof (gen as any).order === 'number' ? (gen as any).order : currentRules.length;
+        const priority = typeof (gen as any).priority === 'number' ? (gen as any).priority : currentRules.length + 1;
+        const evaluateLast = (gen as any).evaluateLast !== false;
+        currentRules.push({
+          id: 'catch-all-fallback',
+          name: gen.name,
+          color: gen.color,
+          patterns: [],
+          collapse: gen.collapse,
+          order,
+          priority,
+          isFallback: true,
+          evaluateLast,
+        });
+      }
+    } else {
+      if (fallbackIdx !== -1) {
+        const [fallbackRule] = currentRules.splice(fallbackIdx, 1);
+        this.currentConfig.generalGroup = {
+          name: fallbackRule.name,
+          color: fallbackRule.color,
+          collapse: fallbackRule.collapse,
+          order: fallbackRule.order,
+          priority: fallbackRule.priority,
+          evaluateLast: fallbackRule.evaluateLast,
+        } as any;
+        currentRules.forEach((r, idx) => {
+          r.order = idx;
+        });
+      }
+    }
+
+    this.currentConfig.rules = currentRules;
     await this.saveConfig();
   }
 
@@ -560,6 +674,14 @@ export class ConfigManager {
         timeoutMs: settings.collapse?.timeoutMs ?? null,
       },
     };
+
+    const fallbackRule = (this.currentConfig.rules || []).find((r) => r.isFallback);
+    if (fallbackRule) {
+      fallbackRule.name = this.currentConfig.generalGroup.name;
+      fallbackRule.color = this.currentConfig.generalGroup.color;
+      fallbackRule.collapse = this.currentConfig.generalGroup.collapse;
+    }
+
     await this.saveConfig();
   }
 

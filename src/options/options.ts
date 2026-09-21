@@ -121,6 +121,31 @@ function updateTesterResult(): void {
   }
 }
 
+function updatePriorityStateForFallback(isFallback: boolean, evaluateLast: boolean): void {
+  const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
+  const priorityHint = document.getElementById('rule-priority-hint');
+  const evalLastCheckbox = document.getElementById('rule-eval-last-input') as HTMLInputElement;
+  const evalLastContainer = document.getElementById('fallback-eval-last-container');
+
+  if (!priorityInput) return;
+
+  if (isFallback) {
+    if (evalLastContainer) evalLastContainer.style.display = 'block';
+    if (evalLastCheckbox) evalLastCheckbox.checked = evaluateLast;
+    if (evaluateLast) {
+      priorityInput.disabled = true;
+      if (priorityHint) priorityHint.textContent = 'Fallback group is evaluated after all other rules.';
+    } else {
+      priorityInput.disabled = false;
+      if (priorityHint) priorityHint.textContent = 'Matching precedence (1 = tested first).';
+    }
+  } else {
+    if (evalLastContainer) evalLastContainer.style.display = 'none';
+    priorityInput.disabled = false;
+    if (priorityHint) priorityHint.textContent = 'Matching precedence (1 = tested first).';
+  }
+}
+
 function renderRulesList(): void {
   const container = document.getElementById('rules-container');
   if (!container) return;
@@ -141,7 +166,7 @@ function renderRulesList(): void {
 
   rules.forEach((rule, index) => {
     const item = document.createElement('div');
-    item.className = 'rule-item';
+    item.className = `rule-item${rule.isFallback ? ' fallback-rule-item' : ''}`;
     item.draggable = true;
     item.dataset.id = rule.id;
 
@@ -153,6 +178,30 @@ function renderRulesList(): void {
     }
 
     const priorityNum = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? index) + 1;
+    const isFallback = Boolean(rule.isFallback);
+
+    let priorityBadgeHtml = '';
+    if (isFallback) {
+      if (rule.evaluateLast !== false) {
+        priorityBadgeHtml = `<span class="priority-badge" title="Evaluated last after all other rules">Priority: Last</span>`;
+      } else {
+        priorityBadgeHtml = `<span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>`;
+      }
+    } else {
+      priorityBadgeHtml = `<span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>`;
+    }
+
+    const fallbackBadgeHtml = isFallback
+      ? `<span class="fallback-badge">Fallback</span>`
+      : '';
+
+    const patternsText = isFallback
+      ? 'Matches all unmatched tabs'
+      : rule.patterns.join(', ');
+
+    const deleteBtnHtml = isFallback
+      ? ''
+      : `<button class="btn btn-danger btn-sm delete-rule-btn">Delete</button>`;
 
     item.innerHTML = `
       <div class="rule-left">
@@ -161,20 +210,20 @@ function renderRulesList(): void {
         <div class="rule-info">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span class="rule-name"></span>
-            <span class="priority-badge ${priorityNum === 1 ? 'p1' : ''}" title="Evaluation Priority ${priorityNum}">Priority ${priorityNum}</span>
+            ${fallbackBadgeHtml}
+            ${priorityBadgeHtml}
           </div>
-          <span class="rule-patterns"></span>
+          <span class="rule-patterns" style="${isFallback ? 'font-style: italic; color: var(--text-secondary);' : ''}">${patternsText}</span>
           <span class="rule-badge">${collapseBadge}</span>
         </div>
       </div>
       <div class="rule-actions">
         <button class="btn btn-secondary btn-sm edit-rule-btn">Edit</button>
-        <button class="btn btn-danger btn-sm delete-rule-btn">Delete</button>
+        ${deleteBtnHtml}
       </div>
     `;
 
     item.querySelector('.rule-name')!.textContent = rule.name;
-    item.querySelector('.rule-patterns')!.textContent = rule.patterns.join(', ');
 
     // Drag and drop events
     item.addEventListener('dragstart', () => {
@@ -216,13 +265,15 @@ function renderRulesList(): void {
       openRuleDialog(rule);
     });
 
-    item.querySelector('.delete-rule-btn')?.addEventListener('click', async () => {
-      if (confirm(`Delete rule "${rule.name}"?`)) {
-        await configManager.deleteRule(rule.id);
-        renderRulesList();
-        showToast('Rule deleted');
-      }
-    });
+    if (!isFallback) {
+      item.querySelector('.delete-rule-btn')?.addEventListener('click', async () => {
+        if (confirm(`Delete rule "${rule.name}"?`)) {
+          await configManager.deleteRule(rule.id);
+          renderRulesList();
+          showToast('Rule deleted');
+        }
+      });
+    }
 
     container.appendChild(item);
   });
@@ -260,14 +311,20 @@ function openRuleDialog(rule?: GroupRule): void {
 
   const priorityInput = document.getElementById('rule-priority-input') as HTMLInputElement;
   const orderInput = document.getElementById('rule-order-input') as HTMLInputElement;
+  const fallbackInfo = document.getElementById('fallback-info-container');
+  const patternsContainer = document.getElementById('standard-patterns-container');
   const existingRules = configManager.getRules();
+  const isFallback = Boolean(rule?.isFallback);
+
+  if (fallbackInfo) fallbackInfo.style.display = isFallback ? 'block' : 'none';
+  if (patternsContainer) patternsContainer.style.display = isFallback ? 'none' : 'block';
 
   if (rule) {
     activeEditingRuleId = rule.id;
-    title.textContent = 'Edit Rule';
+    title.textContent = isFallback ? 'Edit Catch-All Fallback Group' : 'Edit Rule';
     nameInput.value = rule.name;
     currentModalColor = rule.color;
-    currentModalPatterns = [...rule.patterns];
+    currentModalPatterns = isFallback ? [] : [...rule.patterns];
 
     if (priorityInput) {
       const prio = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? 0) + 1;
@@ -283,6 +340,8 @@ function openRuleDialog(rule?: GroupRule): void {
       orderInput.min = '1';
       orderInput.max = String(Math.max(1, existingRules.length));
     }
+
+    updatePriorityStateForFallback(isFallback, isFallback ? (rule.evaluateLast !== false) : false);
 
     if (!rule.collapse.enabled) {
       (document.querySelector('input[name="rule-collapse"][value="disabled"]') as HTMLInputElement).checked = true;
@@ -314,6 +373,7 @@ function openRuleDialog(rule?: GroupRule): void {
       orderInput.min = '1';
       orderInput.max = String(nextPos);
     }
+    updatePriorityStateForFallback(false, false);
     (document.querySelector('input[name="rule-collapse"][value="default"]') as HTMLInputElement).checked = true;
   }
 
@@ -386,132 +446,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // 3. Unmatched Tabs Settings
-  const unmatchedLeave = document.getElementById('unmatched-leave') as HTMLInputElement;
-  const unmatchedGeneral = document.getElementById('unmatched-general') as HTMLInputElement;
-  const generalSettingsDiv = document.getElementById('general-group-settings');
-  const generalNameInput = document.getElementById('general-group-name') as HTMLInputElement;
-
-  const updateGeneralVisibility = () => {
-    if (generalSettingsDiv) {
-      if (unmatchedGeneral.checked) {
-        generalSettingsDiv.style.opacity = '1';
-        generalSettingsDiv.style.pointerEvents = 'auto';
-      } else {
-        generalSettingsDiv.style.opacity = '0.45';
-        generalSettingsDiv.style.pointerEvents = 'none';
-      }
-    }
-  };
-
-  if (unmatchedLeave && unmatchedGeneral) {
-    if (config.unmatchedTabBehavior === 'general-group') {
-      unmatchedGeneral.checked = true;
-    } else {
-      unmatchedLeave.checked = true;
-    }
-    updateGeneralVisibility();
-
-    document.querySelectorAll('input[name="unmatched-behavior"]').forEach((r) => {
-      r.addEventListener('change', async () => {
-        updateGeneralVisibility();
-        const behavior = unmatchedGeneral.checked ? 'general-group' : 'leave-ungrouped';
-        await configManager.setUnmatchedBehavior(behavior);
-        showToast('Unmatched tab settings saved');
-      });
+  // 3. Catch-All Group Toggle
+  const catchAllToggle = document.getElementById('catch-all-toggle') as HTMLInputElement;
+  if (catchAllToggle) {
+    catchAllToggle.checked = config.unmatchedTabBehavior === 'general-group';
+    catchAllToggle.addEventListener('change', async () => {
+      const behavior = catchAllToggle.checked ? 'general-group' : 'leave-ungrouped';
+      await configManager.setUnmatchedBehavior(behavior);
+      renderRulesList();
+      showToast(catchAllToggle.checked ? 'Catch-all group enabled' : 'Catch-all group disabled');
     });
   }
 
-  if (generalNameInput) {
-    generalNameInput.value = config.generalGroup?.name || 'General';
-    generalNameInput.addEventListener('change', async () => {
-      const name = generalNameInput.value.trim() || 'General';
-      const currentGen = configManager.getConfig().generalGroup || {
-        name: 'General',
-        color: 'grey',
-        collapse: { enabled: true, timeoutMs: null },
-      };
-      await configManager.setGeneralGroup({
-        ...currentGen,
-        name,
-      });
-      showToast('General group updated');
-    });
-  }
-
-  renderColorPicker('general-group-colors', config.generalGroup?.color || 'grey', async (color) => {
-    const currentGen = configManager.getConfig().generalGroup || {
-      name: 'General',
-      color: 'grey',
-      collapse: { enabled: true, timeoutMs: null },
-    };
-    await configManager.setGeneralGroup({
-      ...currentGen,
-      color,
-    });
-    showToast('General group color updated');
-  });
-
-  // Wire up general collapse radios and custom timeout
-  const currentGeneral = configManager.getConfig().generalGroup;
-  const generalCustomTimeoutInput = document.getElementById('general-custom-timeout') as HTMLInputElement;
-  const generalCollapseRadios = document.querySelectorAll(
-    'input[name="general-collapse"]'
-  ) as NodeListOf<HTMLInputElement>;
-
-  if (currentGeneral?.collapse?.enabled === false) {
-    const disabledRadio = document.querySelector('input[name="general-collapse"][value="disabled"]') as HTMLInputElement;
-    if (disabledRadio) disabledRadio.checked = true;
-  } else if (currentGeneral?.collapse?.timeoutMs !== null && currentGeneral?.collapse?.timeoutMs !== undefined) {
-    const customRadio = document.querySelector('input[name="general-collapse"][value="custom"]') as HTMLInputElement;
-    if (customRadio) customRadio.checked = true;
-    if (generalCustomTimeoutInput) {
-      generalCustomTimeoutInput.value = String(Math.round(currentGeneral.collapse.timeoutMs / 1000));
-    }
-  } else {
-    const defaultRadio = document.querySelector('input[name="general-collapse"][value="default"]') as HTMLInputElement;
-    if (defaultRadio) defaultRadio.checked = true;
-  }
-
-  const saveGeneralCollapse = async () => {
-    const selectedRadio = document.querySelector('input[name="general-collapse"]:checked') as HTMLInputElement;
-    const choice = selectedRadio?.value || 'default';
-    const currentGen = configManager.getConfig().generalGroup || {
-      name: 'General',
-      color: 'grey',
-      collapse: { enabled: true, timeoutMs: null },
-    };
-
-    let collapse: { enabled: boolean; timeoutMs: number | null } = { enabled: true, timeoutMs: null };
-    if (choice === 'disabled') {
-      collapse = { enabled: false, timeoutMs: null };
-    } else if (choice === 'custom') {
-      const val = Number(generalCustomTimeoutInput?.value) || 5;
-      const validation = ConfigManager.validateTimeoutSeconds(String(val));
-      if (!validation.isValid) {
-        alert(validation.errorMessage);
-        return;
-      }
-      collapse = { enabled: true, timeoutMs: val * 1000 };
-    }
-
-    await configManager.setGeneralGroup({
-      ...currentGen,
-      collapse,
-    });
-    showToast('General group collapse updated');
-  };
-
-  generalCollapseRadios.forEach((r) => {
-    r.addEventListener('change', async () => {
-      await saveGeneralCollapse();
-    });
-  });
-
-  generalCustomTimeoutInput?.addEventListener('change', async () => {
-    const customRadio = document.querySelector('input[name="general-collapse"][value="custom"]') as HTMLInputElement;
-    if (customRadio) customRadio.checked = true;
-    await saveGeneralCollapse();
+  // Fallback dialog priority toggle listener
+  const evalLastCheckbox = document.getElementById('rule-eval-last-input') as HTMLInputElement;
+  evalLastCheckbox?.addEventListener('change', () => {
+    updatePriorityStateForFallback(true, evalLastCheckbox.checked);
   });
 
   // 4. Group Ordering
@@ -720,7 +670,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (currentModalPatterns.length === 0) {
+    const editingRule = activeEditingRuleId ? configManager.getRuleById(activeEditingRuleId) : undefined;
+    const isFallback = Boolean(editingRule?.isFallback);
+
+    if (!isFallback && currentModalPatterns.length === 0) {
       alert('Please add at least one URL pattern.');
       return;
     }
@@ -746,17 +699,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const orderVal = parseInt(orderInput?.value || '1', 10);
     const targetOrder = !isNaN(orderVal) && orderVal >= 1 ? orderVal - 1 : undefined;
 
+    const evalLastInput = document.getElementById('rule-eval-last-input') as HTMLInputElement;
+    const evaluateLast = isFallback ? (evalLastInput ? evalLastInput.checked : true) : undefined;
+
     try {
       if (activeEditingRuleId) {
         await configManager.updateRule(activeEditingRuleId, {
           name,
           color: currentModalColor,
-          patterns: currentModalPatterns,
+          patterns: isFallback ? [] : currentModalPatterns,
           collapse,
           priority: targetPriority,
           order: targetOrder,
+          evaluateLast,
         });
-        showToast(`Rule "${name}" updated`);
+        showToast(isFallback ? `Catch-all group "${name}" updated` : `Rule "${name}" updated`);
       } else {
         await configManager.addRule({
           name,
@@ -781,6 +738,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderRulesList();
     if (globalToggle) {
       globalToggle.checked = updatedConfig.enabled ?? true;
+    }
+    if (catchAllToggle) {
+      catchAllToggle.checked = updatedConfig.unmatchedTabBehavior === 'general-group';
     }
     if (defaultTimeoutInput && document.activeElement !== defaultTimeoutInput) {
       defaultTimeoutInput.value = String(configManager.getTimeoutSeconds());

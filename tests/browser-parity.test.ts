@@ -112,14 +112,9 @@ describe('Cross-Browser Parity & UX Consistency', () => {
         'default-timeout-input',
         'add-rule-btn',
         'rules-container',
-        'unmatched-leave',
-        'unmatched-general',
-        'general-group-settings',
-        'general-group-name',
-        'general-group-colors',
-        'general-custom-timeout',
         'ordering-manual',
         'ordering-alphabetical',
+        'catch-all-toggle',
         'reorganize-on-change',
         'export-btn',
         'import-input',
@@ -129,6 +124,8 @@ describe('Cross-Browser Parity & UX Consistency', () => {
         'rule-name-input',
         'rule-color-picker',
         'rule-priority-input',
+        'rule-order-input',
+        'rule-eval-last-input',
         'pattern-input',
         'add-pattern-btn',
         'toggle-test-btn',
@@ -151,7 +148,7 @@ describe('Cross-Browser Parity & UX Consistency', () => {
     it('options.html includes priority and fallback badge indicators', () => {
       expect(optionsHtml).toContain('priority-badge');
       expect(optionsHtml).toContain('fallback-badge');
-      expect(optionsHtml).toContain('Fallback (Evaluated last)');
+      expect(optionsHtml).toContain('Always evaluate last (Fallback)');
       expect(optionsHtml).toContain('Priority (1 = Highest)');
     });
 

@@ -75,14 +75,16 @@ export class TabOrganizer {
 
     this.tabUrls.set(tab.id, url);
 
-    const rules = this.configManager.getRules();
-    const matchedRule = this.ruleEngine.matchUrl(url, rules);
+    const allRules = this.configManager.getRules();
+    const activeRules =
+      config.unmatchedTabBehavior === 'general-group'
+        ? allRules
+        : allRules.filter((r) => !r.isFallback);
+
+    const matchedRule = this.ruleEngine.matchUrl(url, activeRules);
 
     if (matchedRule) {
       await this.assignTabToNamedGroup(tab, matchedRule.name, matchedRule.color);
-    } else if (config.unmatchedTabBehavior === 'general-group') {
-      const generalGroup = config.generalGroup || { name: 'General', color: 'grey' };
-      await this.assignTabToNamedGroup(tab, generalGroup.name, generalGroup.color);
     }
   }
 

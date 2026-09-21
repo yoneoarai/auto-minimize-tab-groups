@@ -174,7 +174,8 @@ describe('ConfigManager', () => {
 
       const config = await configManager.loadConfig();
       expect(config.defaultTimeoutMs).toBe(50000);
-      expect(config.rules?.length).toBe(1);
+      expect(config.rules?.length).toBe(2);
+      expect(config.rules?.find((r) => r.isFallback)?.name).toBe('Misc');
       expect(config.generalGroup?.name).toBe('Misc');
       expect(config.groupOrdering).toBe('alphabetical');
     });
@@ -574,6 +575,93 @@ describe('ConfigManager', () => {
       await configManager.setCollapsePaused(false);
       expect(configManager.isCollapsePaused()).toBe(false);
       expect(configManager.getConfig().collapsePaused).toBe(false);
+    });
+
+    describe('Fallback Group Rule Management', () => {
+      it('adds fallback rule to rules when unmatched behavior is set to general-group', async () => {
+        expect(configManager.getRules().some((r) => r.isFallback)).toBe(false);
+
+        await configManager.setUnmatchedBehavior('general-group');
+        const rules = configManager.getRules();
+        const fallback = rules.find((r) => r.isFallback);
+        expect(fallback).toBeDefined();
+        expect(fallback!.id).toBe('catch-all-fallback');
+        expect(fallback!.name).toBe('General');
+        expect(fallback!.evaluateLast).toBe(true);
+      });
+
+      it('prevents deleting the fallback rule', async () => {
+        await configManager.setUnmatchedBehavior('general-group');
+        await expect(configManager.deleteRule('catch-all-fallback')).rejects.toThrow(
+          'Cannot delete the catch-all fallback group.'
+        );
+      });
+
+      it('updates fallback rule and syncs changes with generalGroup config', async () => {
+        await configManager.setUnmatchedBehavior('general-group');
+        await configManager.updateRule('catch-all-fallback', {
+          name: 'Miscellaneous',
+          color: 'pink',
+          collapse: { enabled: true, timeoutMs: 15000 },
+          priority: 5,
+          evaluateLast: false,
+        });
+
+        const updatedFallback = configManager.getRuleById('catch-all-fallback');
+        expect(updatedFallback).toBeDefined();
+        expect(updatedFallback!.name).toBe('Miscellaneous');
+        expect(updatedFallback!.color).toBe('pink');
+        expect(updatedFallback!.collapse.timeoutMs).toBe(15000);
+        expect(updatedFallback!.priority).toBe(5);
+        expect(updatedFallback!.evaluateLast).toBe(false);
+
+        const generalGroup = configManager.getConfig().generalGroup;
+        expect(generalGroup?.name).toBe('Miscellaneous');
+        expect(generalGroup?.color).toBe('pink');
+        expect(generalGroup?.collapse.timeoutMs).toBe(15000);
+      });
+
+      it('removes fallback rule when behavior is set to leave-ungrouped while preserving settings', async () => {
+        await configManager.setUnmatchedBehavior('general-group');
+        await configManager.updateRule('catch-all-fallback', {
+          name: 'Inbox',
+          color: 'yellow',
+        });
+
+        await configManager.setUnmatchedBehavior('leave-ungrouped');
+        expect(configManager.getRules().some((r) => r.isFallback)).toBe(false);
+        expect(configManager.getConfig().generalGroup?.name).toBe('Inbox');
+        expect(configManager.getConfig().generalGroup?.color).toBe('yellow');
+
+        // Re-enabling restores the custom settings
+        await configManager.setUnmatchedBehavior('general-group');
+        const restoredFallback = configManager.getRuleById('catch-all-fallback');
+        expect(restoredFallback).toBeDefined();
+        expect(restoredFallback!.name).toBe('Inbox');
+        expect(restoredFallback!.color).toBe('yellow');
+      });
+
+      it('allows reordering rules including the fallback rule', async () => {
+        const r1 = await configManager.addRule({
+          name: 'Work',
+          color: 'blue',
+          patterns: ['github.com'],
+          collapse: { enabled: true, timeoutMs: null },
+        });
+
+        await configManager.setUnmatchedBehavior('general-group');
+        // Currently r1 is order 0, fallback is order 1
+        let rules = configManager.getRules();
+        expect(rules.map((r) => r.id)).toEqual([r1.id, 'catch-all-fallback']);
+
+        // Reorder fallback to position 0 (first in tab strip)
+        await configManager.reorderRules(['catch-all-fallback', r1.id]);
+        rules = configManager.getRules();
+        expect(rules[0].id).toBe('catch-all-fallback');
+        expect(rules[0].order).toBe(0);
+        expect(rules[1].id).toBe(r1.id);
+        expect(rules[1].order).toBe(1);
+      });
     });
   });
 });

@@ -715,65 +715,22 @@
           <span class="ordering-label">Tab Strip Order:</span>
           <div class="segmented-control" role="radiogroup" aria-label="Tab Strip Ordering Mode">
             <input type="radio" name="group-ordering" value="manual" id="ordering-manual" checked>
-            <label for="ordering-manual" title="Arrange tab groups manually via drag & drop or position number">Manual</label>
+            <label for="ordering-manual" title="Arrange tab groups manually via drag & drop">Manual</label>
             <input type="radio" name="group-ordering" value="alphabetical" id="ordering-alphabetical">
             <label for="ordering-alphabetical" title="Sort tab groups alphabetically A-Z by name">Alphabetical</label>
           </div>
         </div>
-        <span class="ordering-hint" id="ordering-hint">Manual: drag to arrange tab groups</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="ordering-label">Catch-All Group:</span>
+          <label class="switch" style="transform: scale(0.85); transform-origin: center;">
+            <input type="checkbox" id="catch-all-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
 
       <div id="rules-container" class="rules-list">
         <!-- Rendered dynamically -->
-      </div>
-    </div>
-
-    <!-- Unmatched Tabs Card -->
-    <div class="card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-        <div class="card-title" style="margin-bottom: 0;">Unmatched Tabs</div>
-        <span class="fallback-badge">Fallback (Evaluated last)</span>
-      </div>
-      <div class="card-subtitle">What should happen to tabs that don't match any rule above?</div>
-      <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="unmatched-behavior" value="leave-ungrouped" id="unmatched-leave" checked>
-          <span>Leave where they are (don't auto-group)</span>
-        </label>
-        <label class="radio-label">
-          <input type="radio" name="unmatched-behavior" value="general-group" id="unmatched-general">
-          <span>Move to a catch-all group</span>
-        </label>
-      </div>
-
-      <div id="general-group-settings" style="margin-top: 14px; padding-left: 24px; opacity: 0.45; pointer-events: none; transition: opacity 0.2s;">
-        <div class="form-group" style="max-width: 240px;">
-          <label for="general-group-name">Group Name</label>
-          <input type="text" id="general-group-name" value="General">
-        </div>
-        <div class="form-group">
-          <label>Color</label>
-          <div id="general-group-colors" class="color-picker-grid"></div>
-        </div>
-        <div class="form-group">
-          <label>Auto-Collapse Behavior</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input type="radio" name="general-collapse" value="default" checked>
-              <span>Use default timeout</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="general-collapse" value="custom">
-              <span>Custom timeout:</span>
-              <input type="number" id="general-custom-timeout" min="1" max="3600" value="5" style="width: 70px; display: inline-block; padding: 4px 6px;">
-              <span>sec</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="general-collapse" value="disabled">
-              <span>Disabled (never auto-collapse)</span>
-            </label>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -810,6 +767,11 @@
     </div>
 
     <form id="rule-form">
+      <div id="fallback-info-container" style="display: none; background: #e8f0fe; border: 1px solid #d2e3fc; border-radius: 6px; padding: 10px 12px; margin-bottom: 16px;">
+        <div style="font-size: 13px; font-weight: 600; color: #1967d2; margin-bottom: 2px;">Catch-All Fallback Group</div>
+        <div style="font-size: 12px; color: #3c4043;">Automatically groups any tabs that do not match the specific group rules above.</div>
+      </div>
+
       <div class="form-group">
         <label for="rule-name-input">Group Name *</label>
         <input type="text" id="rule-name-input" placeholder="e.g. Work, Social, GitHub" required>
@@ -824,7 +786,13 @@
         <div class="form-group" style="flex: 1; margin-bottom: 0;">
           <label for="rule-priority-input">Rule Priority (1 = Highest)</label>
           <input type="number" id="rule-priority-input" min="1" value="1" required>
-          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Matching precedence (1 = tested first).</span>
+          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;" id="rule-priority-hint">Matching precedence (1 = tested first).</span>
+          <div id="fallback-eval-last-container" style="display: none; margin-top: 6px;">
+            <label class="radio-label" style="font-size: 12px; cursor: pointer; align-items: center; gap: 6px;">
+              <input type="checkbox" id="rule-eval-last-input" checked>
+              <span>Always evaluate last (Fallback)</span>
+            </label>
+          </div>
         </div>
         <div class="form-group" style="flex: 1; margin-bottom: 0;">
           <label for="rule-order-input">Tab Strip Position</label>
@@ -833,7 +801,7 @@
         </div>
       </div>
 
-      <div class="form-group">
+      <div id="standard-patterns-container" class="form-group">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <label style="margin-bottom: 0;">URL Patterns *</label>
           <button type="button" id="toggle-test-btn" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;">Test Pattern</button>

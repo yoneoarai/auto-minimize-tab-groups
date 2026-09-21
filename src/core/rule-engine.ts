@@ -179,16 +179,34 @@ export class RuleEngine {
     }
 
     // Rules are evaluated strictly by ascending priority (Priority 1 first).
+    // If a rule is marked as isFallback:
+    //   - If evaluateLast !== false, its priority is treated as Infinity (evaluated after all normal pattern rules).
+    //   - Otherwise, its configured numeric priority is used.
     // If priorities are equal, ties are broken by ascending tab strip order.
+    const getEffectivePriority = (rule: GroupRule): number => {
+      if (rule.isFallback && rule.evaluateLast !== false) {
+        return Infinity;
+      }
+      return typeof rule.priority === 'number' ? rule.priority : (rule.order ?? 0) + 1;
+    };
+
     const sortedRules = [...rules].sort((a, b) => {
-      const prioA = typeof a.priority === 'number' ? a.priority : (a.order ?? 0) + 1;
-      const prioB = typeof b.priority === 'number' ? b.priority : (b.order ?? 0) + 1;
+      const prioA = getEffectivePriority(a);
+      const prioB = getEffectivePriority(b);
       if (prioA !== prioB) {
         return prioA - prioB;
       }
       return (a.order ?? 0) - (b.order ?? 0);
     });
+
     for (const rule of sortedRules) {
+      if (rule.isFallback) {
+        return {
+          rule,
+          matchedPattern: '*',
+        };
+      }
+
       if (!rule.patterns || rule.patterns.length === 0) {
         continue;
       }

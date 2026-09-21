@@ -291,5 +291,57 @@ describe('RuleEngine', () => {
       expect(RuleEngine.matchUrl('', rules)).toBeNull();
       expect(RuleEngine.matchUrl('https://google.com', [])).toBeNull();
     });
+
+    describe('Fallback rule matching', () => {
+      const fallbackRule: GroupRule = {
+        id: 'catch-all-fallback',
+        name: 'General',
+        color: 'grey',
+        patterns: [],
+        collapse: { enabled: true, timeoutMs: null },
+        order: 0,
+        priority: 1,
+        isFallback: true,
+        evaluateLast: true,
+      };
+
+      const specificRule: GroupRule = {
+        id: 'rule-specific',
+        name: 'Work',
+        color: 'blue',
+        patterns: ['github.com/*'],
+        collapse: { enabled: true, timeoutMs: null },
+        order: 1,
+        priority: 10, // Numerically lower priority than fallback's priority=1, but evaluateLast=true
+      };
+
+      it('evaluates fallback rule last when evaluateLast is true, even with priority 1 and order 0', () => {
+        const testRules = [fallbackRule, specificRule];
+        // Matches specificRule because fallback is evaluated last
+        const matchSpecific = RuleEngine.matchUrlWithDetail('https://github.com/myorg', testRules);
+        expect(matchSpecific).not.toBeNull();
+        expect(matchSpecific!.rule.id).toBe('rule-specific');
+
+        // Matches fallback for non-matching URLs
+        const matchFallback = RuleEngine.matchUrlWithDetail('https://random.com', testRules);
+        expect(matchFallback).not.toBeNull();
+        expect(matchFallback!.rule.id).toBe('catch-all-fallback');
+        expect(matchFallback!.matchedPattern).toBe('*');
+      });
+
+      it('evaluates fallback rule by numeric priority when evaluateLast is false', () => {
+        const customPriorityFallback: GroupRule = {
+          ...fallbackRule,
+          evaluateLast: false,
+          priority: 1, // Highest priority!
+        };
+
+        const testRules = [customPriorityFallback, specificRule];
+        // Now fallback matches first because priority 1 beats priority 10
+        const result = RuleEngine.matchUrlWithDetail('https://github.com/myorg', testRules);
+        expect(result).not.toBeNull();
+        expect(result!.rule.id).toBe('catch-all-fallback');
+      });
+    });
   });
 });
