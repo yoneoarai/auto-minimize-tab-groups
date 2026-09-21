@@ -547,7 +547,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const resetAllBtn = document.getElementById('reset-all-btn');
   if (resetAllBtn) {
     resetAllBtn.addEventListener('click', async () => {
-      if (confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
+      const confirmed = confirm(
+        'Are you sure you want to reset all settings to defaults?\n\n' +
+        '⚠️ This will permanently delete all of your group rules, URL patterns, and configurations. This cannot be undone.'
+      );
+      if (confirmed) {
         await configManager.resetToDefault();
         window.location.reload();
       }
