@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Auto Minimize Tab Groups",
+  "name": "Tabbi - Tab Group Manager",
   "author": "yoneoarai@gmail.com",
-  "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
-  "version": "0.2.3",
+  "description": "Automatically organize tabs into groups with URL rules and customize auto-minimize behavior.",
+  "version": "1.0.0",
   "background": {
     "scripts": [
       "background.js"
@@ -11,14 +11,28 @@
   },
   "permissions": [
     "tabGroups",
-    "storage"
+    "storage",
+    "tabs"
   ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "icons": {
-    "128": "icon.png"
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Auto Minimize Tab Groups Settings"
+    "default_title": "Tabbi - Tab Group Manager",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
   },
   "browser_specific_settings": {
     "gecko": {

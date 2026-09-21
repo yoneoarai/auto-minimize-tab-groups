@@ -17,6 +17,8 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   public groups: Map<number, BrowserTabGroup> = new Map();
   public windows: Map<number, BrowserWindow> = new Map();
   public storage: Record<string, any> = {};
+  public grantedPermissions: Set<string> = new Set();
+  private nextGroupId = 100;
 
   private storageChangeListeners: Array<(changes: Record<string, StorageChange>) => void> = [];
   private tabActivatedListeners: Array<(activeInfo: TabActiveInfo) => void> = [];
@@ -49,6 +51,52 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     });
   }
 
+  public async groupTabs(options: {
+    tabIds: number[];
+    groupId?: number;
+    createProperties?: { windowId?: number };
+  }): Promise<number> {
+    for (const tabId of options.tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab?.pinned) {
+        throw new Error('Tabs cannot be grouped while pinned.');
+      }
+    }
+
+    let targetGroupId = options.groupId;
+    if (targetGroupId === undefined) {
+      targetGroupId = this.nextGroupId++;
+      const newGroup: BrowserTabGroup = {
+        id: targetGroupId,
+        collapsed: false,
+        windowId: options.createProperties?.windowId ?? 1,
+        title: '',
+        color: 'grey',
+      };
+      this.groups.set(targetGroupId, newGroup);
+    }
+
+    for (const tabId of options.tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab) {
+        tab.groupId = targetGroupId;
+        this.tabs.set(tabId, { ...tab });
+      }
+    }
+
+    return targetGroupId;
+  }
+
+  public async ungroupTabs(tabIds: number[]): Promise<void> {
+    for (const tabId of tabIds) {
+      const tab = this.tabs.get(tabId);
+      if (tab) {
+        tab.groupId = -1;
+        this.tabs.set(tabId, { ...tab });
+      }
+    }
+  }
+
   // ==========================================================================
   // Tab Groups API
   // ==========================================================================
@@ -70,7 +118,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
 
   public async updateTabGroup(
     groupId: number,
-    updateProperties: { collapsed?: boolean; title?: string }
+    updateProperties: { collapsed?: boolean; title?: string; color?: string }
   ): Promise<BrowserTabGroup> {
     const group = this.groups.get(groupId);
     if (!group) {
@@ -79,6 +127,29 @@ export class MockBrowserAdapter implements IBrowserAdapter {
     const updated = { ...group, ...updateProperties };
     this.groups.set(groupId, updated);
     return { ...updated };
+  }
+
+  public async moveTabGroup(groupId: number, moveProperties: { index: number }): Promise<void> {
+    const group = this.groups.get(groupId);
+    if (!group) {
+      throw new Error(`Tab group ${groupId} not found`);
+    }
+    // State is maintained in mock
+  }
+
+  // ==========================================================================
+  // Permissions API
+  // ==========================================================================
+
+  public async requestPermission(permissions: string[]): Promise<boolean> {
+    for (const perm of permissions) {
+      this.grantedPermissions.add(perm);
+    }
+    return true;
+  }
+
+  public async hasPermission(permissions: string[]): Promise<boolean> {
+    return permissions.every((p) => this.grantedPermissions.has(p));
   }
 
   // ==========================================================================

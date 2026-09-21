@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Auto Minimize Tab Groups</title>
+    <title>Tabbi — Tab Group Manager</title>
     <style>
       :root {
         --primary: #1a73e8;
@@ -13,205 +13,232 @@
         --bg: #ffffff;
         --bg-subtle: #f8f9fa;
         --border: #dadce0;
-        --success-bg: #e6f4ea;
-        --success-text: #137333;
-        --error-bg: #fce8e6;
-        --error-text: #c5221f;
       }
 
       * {
         box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
 
       body {
-        width: 320px;
-        margin: 0;
+        width: 280px;
         padding: 16px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
+        font-size: 13px;
         color: var(--text-primary);
         background-color: var(--bg);
       }
 
       .header {
-        text-align: center;
-        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
         padding-bottom: 12px;
         border-bottom: 1px solid var(--border);
       }
 
+      .title-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .header-icon {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: block;
+      }
+
       .header h1 {
-        margin: 0;
         font-size: 16px;
         font-weight: 600;
-        color: var(--primary);
+        color: var(--text-primary);
       }
 
-      .settings-form {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+      /* Switch */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 38px;
+        height: 20px;
       }
 
-      .form-group {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
       }
 
-      .form-group label {
-        font-weight: 500;
-        color: var(--text-secondary);
-        font-size: 13px;
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: #ccc;
+        transition: .2s;
+        border-radius: 20px;
       }
 
-      .form-group input[type="number"] {
-        padding: 8px 12px;
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 14px;
+        width: 14px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .2s;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: var(--primary);
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(18px);
+      }
+
+      /* Stats list */
+      .stats-card {
+        background: var(--bg-subtle);
         border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 14px;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
       }
 
-      .form-group input[type="number"]:focus {
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
-      }
-
-      .help-text {
-        font-size: 12px;
-        color: var(--text-secondary);
-        line-height: 1.4;
-      }
-
-      .button-group {
+      .stat-row {
         display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+      }
+
+      .stat-label {
+        color: var(--text-secondary);
+      }
+
+      .stat-value {
+        font-weight: 600;
+      }
+
+      .control-card {
+        background: var(--bg-subtle);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+      }
+
+      .control-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 8px;
-        margin-top: 4px;
+      }
+
+      .control-text {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .control-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-primary);
+      }
+
+      .control-subtitle {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+
+      .control-card.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+
+      .paused-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: #fef08a;
+        color: #854d0e;
+        padding: 1px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
       }
 
       .btn {
-        flex: 1;
-        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 9px 12px;
+        background-color: var(--primary);
+        color: white;
         border: none;
         border-radius: 4px;
         font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: background-color 0.2s, opacity 0.2s;
+        transition: background-color 0.2s;
       }
 
-      .btn-primary {
-        background-color: var(--primary);
-        color: white;
-      }
-
-      .btn-primary:hover:not(:disabled) {
+      .btn:hover {
         background-color: var(--primary-hover);
-      }
-
-      .btn-secondary {
-        background-color: var(--bg-subtle);
-        color: #3c4043;
-        border: 1px solid var(--border);
-      }
-
-      .btn-secondary:hover:not(:disabled) {
-        background-color: #f1f3f4;
-      }
-
-      .btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .message {
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 500;
-        margin-top: 8px;
-        text-align: center;
-      }
-
-      .message.success {
-        background-color: var(--success-bg);
-        color: var(--success-text);
-        border: 1px solid #ceead6;
-      }
-
-      .message.error {
-        background-color: var(--error-bg);
-        color: var(--error-text);
-        border: 1px solid #fad2cf;
-      }
-
-      .status-section {
-        margin-top: 16px;
-        padding: 10px 12px;
-        background-color: var(--bg-subtle);
-        border-radius: 6px;
-        font-size: 12px;
-      }
-
-      .status-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .status-label {
-        color: var(--text-secondary);
-      }
-
-      .status-value {
-        font-weight: 600;
-        color: var(--primary);
       }
     </style>
   </head>
   <body>
     <div class="header">
-      <h1>Auto Minimize Tab Groups</h1>
+      <div class="title-container">
+        <img src="icon-large.svg" alt="Tabbi" class="header-icon">
+        <h1>Tabbi</h1>
+      </div>
+      <label class="switch" title="Toggle Tabbi on/off">
+        <input type="checkbox" id="popup-enable-toggle" checked>
+        <span class="slider"></span>
+      </label>
     </div>
 
-    <form id="settings-form" class="settings-form">
-      <div class="form-group">
-        <label for="timeout">Timeout (seconds)</label>
-        <input
-          type="number"
-          id="timeout"
-          name="timeout"
-          min="1"
-          max="3600"
-          step="1"
-          aria-describedby="timeout-help"
-          required
-        >
-        <div id="timeout-help" class="help-text">
-          Time to wait before minimizing inactive tab groups (1–3600s)
+    <div class="control-card" id="pause-collapse-card">
+      <div class="control-row">
+        <div class="control-text">
+          <span class="control-title">Pause auto-collapse</span>
+          <span class="control-subtitle">Keep groups open while working</span>
         </div>
-      </div>
-
-      <div class="button-group">
-        <button type="submit" class="btn btn-primary" id="save-btn">
-          Save
-        </button>
-        <button type="button" class="btn btn-secondary" id="reset-btn">
-          Reset to Default
-        </button>
-      </div>
-    </form>
-
-    <div id="message-container"></div>
-
-    <div class="status-section">
-      <div class="status-item">
-        <span class="status-label">Current Timeout:</span>
-        <span class="status-value" id="current-timeout">30s</span>
+        <label class="switch" title="Pause auto-collapsing for all groups">
+          <input type="checkbox" id="popup-pause-collapse-toggle">
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
+
+    <div class="stats-card">
+      <div class="stat-row">
+        <span class="stat-label">Active rules</span>
+        <span class="stat-value" id="stat-rules-count">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Active groups</span>
+        <span class="stat-value" id="stat-groups-count">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Default timeout</span>
+        <span class="stat-value" id="stat-timeout">30s</span>
+      </div>
+    </div>
+
+    <button id="open-settings-btn" class="btn">⚙ Open Full Settings</button>
 
     <script src="popup.js"></script>
   </body>

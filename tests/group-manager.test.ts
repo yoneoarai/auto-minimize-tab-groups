@@ -188,4 +188,221 @@ describe('GroupManager', () => {
 
     expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
   });
+
+  describe('Per-Group Collapse and Custom Rules', () => {
+    it('applies custom timeout from matching rule', async () => {
+      await configManager.addRule({
+        name: 'Social',
+        color: 'pink',
+        patterns: ['x.com'],
+        collapse: { enabled: true, timeoutMs: 5000 },
+      });
+
+      const socialGroup = 801;
+      const defaultGroup = 802;
+
+      mockAdapter.groups.set(socialGroup, {
+        id: socialGroup,
+        title: 'Social',
+        color: 'pink',
+        collapsed: false,
+        windowId: 1,
+      });
+      mockAdapter.groups.set(defaultGroup, {
+        id: defaultGroup,
+        title: 'Work',
+        color: 'blue',
+        collapsed: false,
+        windowId: 1,
+      });
+
+      mockAdapter.tabs.set(81, { id: 81, groupId: socialGroup, windowId: 1, active: false });
+      mockAdapter.tabs.set(82, { id: 82, groupId: defaultGroup, windowId: 1, active: false });
+
+      // Refresh timers so metadata is learned
+      await groupManager.refreshGroupTimers();
+
+      // After 5s, Social group collapses, but Work group remains open
+      await jest.advanceTimersByTimeAsync(5000);
+      expect((await mockAdapter.getTabGroup(socialGroup)).collapsed).toBe(true);
+      expect((await mockAdapter.getTabGroup(defaultGroup)).collapsed).toBe(false);
+
+      // After remaining 25s, Work group collapses
+      await jest.advanceTimersByTimeAsync(25000);
+      expect((await mockAdapter.getTabGroup(defaultGroup)).collapsed).toBe(true);
+    });
+
+    it('never minimizes a group when collapse is disabled for its rule', async () => {
+      await configManager.addRule({
+        name: 'Persistent Group',
+        color: 'purple',
+        patterns: ['github.com'],
+        collapse: { enabled: false, timeoutMs: null },
+      });
+
+      const persistentGroup = 803;
+      mockAdapter.groups.set(persistentGroup, {
+        id: persistentGroup,
+        title: 'Persistent Group',
+        color: 'purple',
+        collapsed: false,
+        windowId: 1,
+      });
+      mockAdapter.tabs.set(83, { id: 83, groupId: persistentGroup, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+
+      // Fast-forward 60 seconds
+      await jest.advanceTimersByTimeAsync(60000);
+
+      const group = await mockAdapter.getTabGroup(persistentGroup);
+      expect(group.collapsed).toBe(false);
+      expect(groupManager.getGroupState(persistentGroup)?.timer).toBeFalsy();
+    });
+
+    it('respects global enabled toggle', async () => {
+      const groupId = 804;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(84, { id: 84, groupId, windowId: 1, active: false });
+
+      await configManager.setEnabled(false);
+      await groupManager.refreshGroupTimers();
+
+      expect(groupManager.getTrackedGroupIds()).toHaveLength(0);
+
+      await jest.advanceTimersByTimeAsync(60000);
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(false);
+    });
+
+    it('respects General group collapse settings', async () => {
+      await configManager.setGeneralGroup({
+        name: 'General',
+        color: 'grey',
+        collapse: { enabled: false, timeoutMs: null },
+      });
+
+      const generalGroup = 805;
+      mockAdapter.groups.set(generalGroup, {
+        id: generalGroup,
+        title: 'General',
+        color: 'grey',
+        collapsed: false,
+        windowId: 1,
+      });
+      mockAdapter.tabs.set(85, { id: 85, groupId: generalGroup, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+      await jest.advanceTimersByTimeAsync(60000);
+
+      const group = await mockAdapter.getTabGroup(generalGroup);
+      expect(group.collapsed).toBe(false);
+    });
+
+    it('respects General group independent custom timeout', async () => {
+      await configManager.setGeneralGroup({
+        name: 'General',
+        color: 'grey',
+        collapse: { enabled: true, timeoutMs: 10000 },
+      });
+
+      const generalGroup = 807;
+      mockAdapter.groups.set(generalGroup, {
+        id: generalGroup,
+        title: 'General',
+        color: 'grey',
+        collapsed: false,
+        windowId: 1,
+      });
+      mockAdapter.tabs.set(87, { id: 87, groupId: generalGroup, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+
+      // At 5s (halfway of 10s custom timeout), should still be open
+      await jest.advanceTimersByTimeAsync(5000);
+      expect((await mockAdapter.getTabGroup(generalGroup)).collapsed).toBe(false);
+
+      // At 10s total, should now be collapsed (even though default timeout is 30s)
+      await jest.advanceTimersByTimeAsync(5000);
+      expect((await mockAdapter.getTabGroup(generalGroup)).collapsed).toBe(true);
+    });
+
+    it('does not reset an already-running timer on an inactive group when refreshing timers', async () => {
+      const groupId = 806;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(86, { id: 86, groupId, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+      const initialTimer = groupManager.getGroupState(groupId)?.timer;
+      expect(initialTimer).not.toBeNull();
+
+      // Advance halfway through timeout (15s out of 30s)
+      await jest.advanceTimersByTimeAsync(15000);
+
+      // Refresh timers again (e.g. triggered by tab creation or removal in another group)
+      await groupManager.refreshGroupTimers();
+
+      // Timer reference must be identical (not blown away and restarted)
+      const currentTimer = groupManager.getGroupState(groupId)?.timer;
+      expect(currentTimer).toBe(initialTimer);
+
+      // Advance the remaining 15s (total 30s from original arming)
+      await jest.advanceTimersByTimeAsync(15000);
+
+      // Group should now be collapsed on schedule
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(true);
+    });
+
+    it('stops maintaining timers and prevents all collapsing when collapsePaused is enabled', async () => {
+      const groupId = 901;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(91, { id: 91, groupId, windowId: 1, active: false });
+
+      // Enable pause
+      await configManager.setCollapsePaused(true);
+
+      // Attempting to set timer directly or via refreshGroupTimers should arm zero timers
+      groupManager.setGroupTimer(groupId, 1);
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      await groupManager.refreshGroupTimers();
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      // Advancing time far past timeout does not collapse the group
+      await jest.advanceTimersByTimeAsync(120000);
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(false);
+    });
+
+    it('immediately cancels existing running timers when collapsePaused is turned on', async () => {
+      const groupId = 902;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(92, { id: 92, groupId, windowId: 1, active: false });
+
+      await groupManager.refreshGroupTimers();
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // User clicks "Pause auto-collapse"
+      await configManager.setCollapsePaused(true);
+
+      // Existing timer must be cleared immediately
+      expect(groupManager.getGroupState(groupId)).toBeUndefined();
+
+      // Time advances — group remains open
+      await jest.advanceTimersByTimeAsync(60000);
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(false);
+
+      // User unpauses
+      await configManager.setCollapsePaused(false);
+      await jest.advanceTimersByTimeAsync(DEBOUNCE_DELAY_MS);
+
+      // Timer should be restored
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // After timeout expires, group collapses
+      await jest.advanceTimersByTimeAsync(30000);
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+    });
+  });
 });

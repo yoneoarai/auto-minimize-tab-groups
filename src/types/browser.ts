@@ -8,6 +8,9 @@ export interface BrowserTab {
   windowId?: number;
   active: boolean;
   openerTabId?: number;
+  url?: string;
+  pendingUrl?: string;
+  pinned?: boolean;
 }
 
 export interface BrowserTabGroup {
@@ -31,6 +34,8 @@ export interface TabActiveInfo {
 export interface TabChangeInfo {
   groupId?: number;
   status?: string;
+  url?: string;
+  pinned?: boolean;
 }
 
 export interface TabRemoveInfo {
@@ -58,7 +63,19 @@ export interface IBrowserAdapter {
   // Tab Groups
   getTabGroup(groupId: number): Promise<BrowserTabGroup>;
   queryTabGroups(queryInfo: { windowId?: number }): Promise<BrowserTabGroup[]>;
-  updateTabGroup(groupId: number, updateProperties: { collapsed?: boolean; title?: string }): Promise<BrowserTabGroup>;
+  updateTabGroup(
+    groupId: number,
+    updateProperties: { collapsed?: boolean; title?: string; color?: string }
+  ): Promise<BrowserTabGroup>;
+
+  // Advanced Tab & Group Management (Tabbi)
+  groupTabs?(options: { tabIds: number[]; groupId?: number; createProperties?: { windowId?: number } }): Promise<number>;
+  ungroupTabs?(tabIds: number[]): Promise<void>;
+  moveTabGroup?(groupId: number, moveProperties: { index: number }): Promise<void>;
+
+  // Permissions
+  requestPermission?(permissions: string[]): Promise<boolean>;
+  hasPermission?(permissions: string[]): Promise<boolean>;
 
   // Windows
   getAllWindows(getInfo?: { populate?: boolean }): Promise<BrowserWindow[]>;

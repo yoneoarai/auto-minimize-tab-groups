@@ -4,118 +4,92 @@ import { ConfigManager } from '../core/config-manager';
 const browserAdapter = new BrowserAdapter();
 const configManager = new ConfigManager(browserAdapter);
 
-function showMessage(message: string, isError: boolean): void {
-  const container = document.getElementById('message-container');
-  if (!container) return;
+async function refreshDisplay(): Promise<void> {
+  const config = configManager.getConfig();
+  const isEnabled = config.enabled ?? true;
+  const isPaused = Boolean(config.collapsePaused);
 
-  const existingMessage = container.querySelector('.message');
-  if (existingMessage) {
-    existingMessage.remove();
+  const toggle = document.getElementById('popup-enable-toggle') as HTMLInputElement;
+  if (toggle) {
+    toggle.checked = isEnabled;
   }
 
-  const messageElement = document.createElement('div');
-  messageElement.className = `message ${isError ? 'error' : 'success'}`;
-  messageElement.textContent = message;
-
-  container.appendChild(messageElement);
-
-  setTimeout(() => {
-    if (messageElement.parentNode) {
-      messageElement.remove();
+  const pauseToggle = document.getElementById('popup-pause-collapse-toggle') as HTMLInputElement;
+  const pauseCard = document.getElementById('pause-collapse-card');
+  if (pauseToggle) {
+    pauseToggle.checked = isPaused;
+    pauseToggle.disabled = !isEnabled;
+  }
+  if (pauseCard) {
+    if (!isEnabled) {
+      pauseCard.classList.add('disabled');
+    } else {
+      pauseCard.classList.remove('disabled');
     }
-  }, 3000);
-}
-
-function updateStatusDisplay(seconds: number): void {
-  const currentTimeoutEl = document.getElementById('current-timeout');
-  if (currentTimeoutEl) {
-    currentTimeoutEl.textContent = `${seconds}s`;
   }
-}
 
-function setButtonLoading(button: HTMLButtonElement, isLoading: boolean): void {
-  button.disabled = isLoading;
-  button.textContent = isLoading ? 'Saving...' : 'Save';
+  const rulesCountEl = document.getElementById('stat-rules-count');
+  if (rulesCountEl) {
+    rulesCountEl.textContent = String(config.rules?.length || 0);
+  }
+
+  const timeoutEl = document.getElementById('stat-timeout');
+  if (timeoutEl) {
+    if (isPaused) {
+      timeoutEl.innerHTML = `${configManager.getTimeoutSeconds()}s <span class="paused-badge">Paused</span>`;
+    } else {
+      timeoutEl.textContent = `${configManager.getTimeoutSeconds()}s`;
+    }
+  }
+
+  const groupsCountEl = document.getElementById('stat-groups-count');
+  if (groupsCountEl) {
+    try {
+      const groups = await browserAdapter.queryTabGroups({});
+      groupsCountEl.textContent = String(groups.length);
+    } catch {
+      groupsCountEl.textContent = '0';
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const form = document.getElementById('settings-form') as HTMLFormElement;
-  const timeoutInput = document.getElementById('timeout') as HTMLInputElement;
-  const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
-  const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement;
+  await configManager.loadConfig();
+  await refreshDisplay();
 
-  if (!form || !timeoutInput || !saveBtn || !resetBtn) {
-    console.error('Required popup DOM elements not found');
-    return;
+  const toggle = document.getElementById('popup-enable-toggle') as HTMLInputElement;
+  if (toggle) {
+    toggle.addEventListener('change', async () => {
+      await configManager.setEnabled(toggle.checked);
+    });
   }
 
-  // Load configuration
-  try {
-    await configManager.loadConfig();
-    const currentSeconds = configManager.getTimeoutSeconds();
-    timeoutInput.value = currentSeconds.toString();
-    updateStatusDisplay(currentSeconds);
-  } catch (error) {
-    console.error('Failed to load settings:', error);
-    showMessage('Failed to load current settings.', true);
+  const pauseToggle = document.getElementById('popup-pause-collapse-toggle') as HTMLInputElement;
+  if (pauseToggle) {
+    pauseToggle.addEventListener('change', async () => {
+      await configManager.setCollapsePaused(pauseToggle.checked);
+    });
   }
 
-  // Listen to external config changes (e.g. from storage sync)
-  configManager.onConfigChanged((newTimeoutMs) => {
-    const seconds = Math.round(newTimeoutMs / 1000);
-    updateStatusDisplay(seconds);
-  });
+  const openSettingsBtn = document.getElementById('open-settings-btn');
+  if (openSettingsBtn) {
+    openSettingsBtn.addEventListener('click', () => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+          chrome.runtime.openOptionsPage();
+        } else if (typeof (globalThis as any).browser !== 'undefined' && (globalThis as any).browser.runtime?.openOptionsPage) {
+          (globalThis as any).browser.runtime.openOptionsPage();
+        } else {
+          window.open('options.html');
+        }
+      } catch {
+        window.open('options.html');
+      }
+      window.close();
+    });
+  }
 
-  // Blur validation
-  timeoutInput.addEventListener('blur', () => {
-    const validation = ConfigManager.validateTimeoutSeconds(timeoutInput.value);
-    if (!validation.isValid && validation.errorMessage) {
-      showMessage(validation.errorMessage, true);
-    }
-  });
-
-  // Form submission
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const validation = ConfigManager.validateTimeoutSeconds(timeoutInput.value);
-    if (!validation.isValid && validation.errorMessage) {
-      showMessage(validation.errorMessage, true);
-      return;
-    }
-
-    const seconds = Number(timeoutInput.value);
-    setButtonLoading(saveBtn, true);
-
-    try {
-      await configManager.setTimeoutSeconds(seconds);
-      setButtonLoading(saveBtn, false);
-      showMessage(`Settings saved! Inactive groups will minimize after ${seconds}s.`, false);
-      updateStatusDisplay(seconds);
-    } catch (error: any) {
-      setButtonLoading(saveBtn, false);
-      showMessage(error?.message || 'Failed to save settings.', true);
-    }
-  });
-
-  // Reset to default
-  resetBtn.addEventListener('click', async () => {
-    try {
-      await configManager.resetToDefault();
-      const defaultSeconds = configManager.getTimeoutSeconds();
-      timeoutInput.value = defaultSeconds.toString();
-      updateStatusDisplay(defaultSeconds);
-      showMessage(`Settings reset to default (${defaultSeconds}s).`, false);
-    } catch (error) {
-      console.error('Failed to reset settings:', error);
-      showMessage('Failed to reset settings.', true);
-    }
-  });
-
-  // Keyboard shortcut (Cmd+Enter or Ctrl+Enter)
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      form.dispatchEvent(new Event('submit'));
-    }
+  configManager.onConfigChanged(() => {
+    refreshDisplay();
   });
 });

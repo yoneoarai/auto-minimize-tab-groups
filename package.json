@@ -1,7 +1,7 @@
 {
   "name": "auto-minimize-tab-groups",
-  "version": "0.2.3",
-  "description": "Minimize tab groups after 30s of inactivity. Active tab groups stay open.",
+  "version": "1.0.0",
+  "description": "Automatically organize tabs into groups with URL rules and customize auto-minimize behavior.",
   "scripts": {
     "build": "npm run build:chrome && npm run build:firefox",
     "build:chrome": "webpack --mode production --env browser=chrome",
