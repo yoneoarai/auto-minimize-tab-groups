@@ -174,8 +174,8 @@ describe('Cross-Browser Parity & UX Consistency', () => {
     it('options.html and popup.html both support native dark mode and version footers', () => {
       expect(optionsHtml).toContain('@media (prefers-color-scheme: dark)');
       expect(popupHtml).toContain('@media (prefers-color-scheme: dark)');
-      expect(optionsHtml).toContain('Tabbi — Tab Group Manager v1.0.0');
-      expect(popupHtml).toContain('Tabbi v1.0.0');
+      expect(optionsHtml).toContain('Tabbi — Tab Group Manager v1.1.0');
+      expect(popupHtml).toContain('Tabbi v1.1.0');
     });
 
     it('options.html defines accurate tab group color palette and accessible toast', () => {

@@ -3,7 +3,7 @@
   "name": "Tabbi - Tab Group Manager",
   "author": "yoneoarai@gmail.com",
   "description": "Automatically organize tabs into groups with URL rules and customize auto-minimize behavior.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "background": {
     "service_worker": "background.js"
   },
