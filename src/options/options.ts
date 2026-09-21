@@ -153,16 +153,10 @@ function renderRulesList(): void {
     }
 
     const priorityNum = typeof rule.priority === 'number' ? rule.priority : (rule.order ?? index) + 1;
-    const isFirst = index === 0;
-    const isLast = index === rules.length - 1;
 
     item.innerHTML = `
       <div class="rule-left">
-        <div class="priority-controls">
-          <button class="move-btn move-up-btn" title="Move Left in Tab Strip" ${isFirst ? 'disabled' : ''}>▲</button>
-          <button class="move-btn move-down-btn" title="Move Right in Tab Strip" ${isLast ? 'disabled' : ''}>▼</button>
-        </div>
-        <span class="drag-handle" title="Drag to reorder tab strip position">≡</span>
+        <span class="drag-handle" title="Drag to reorder tab strip position">⋮⋮</span>
         <div class="color-dot color-${rule.color}"></div>
         <div class="rule-info">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -215,21 +209,6 @@ function renderRulesList(): void {
       );
       await configManager.reorderRules(updatedIds);
       showToast('Tab group order updated');
-    });
-
-    // Reorder move buttons
-    item.querySelector('.move-up-btn')?.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await configManager.moveRule(rule.id, 'up');
-      renderRulesList();
-      showToast(`Moved "${rule.name}" left`);
-    });
-
-    item.querySelector('.move-down-btn')?.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await configManager.moveRule(rule.id, 'down');
-      renderRulesList();
-      showToast(`Moved "${rule.name}" right`);
     });
 
     // Action buttons
@@ -544,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (orderingHint) {
       orderingHint.textContent = isAlpha
         ? 'Alphabetical: tab groups in browser will be sorted A-Z'
-        : 'Manual: drag & drop or ▲/▼ to arrange tab groups';
+        : 'Manual: drag to arrange tab groups';
     }
   };
 

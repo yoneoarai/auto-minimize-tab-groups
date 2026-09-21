@@ -72,16 +72,6 @@
         color: #e8eaed !important;
       }
 
-      .move-btn {
-        background-color: #35363a !important;
-        border-color: #3c4043 !important;
-        color: #e8eaed !important;
-      }
-
-      .move-btn:hover:not(:disabled) {
-        background-color: #444746 !important;
-      }
-
       .empty-state {
         background-color: #292a2d !important;
         border-color: #3c4043 !important;
@@ -345,6 +335,20 @@
       color: var(--text-secondary);
       font-size: 16px;
       user-select: none;
+      cursor: grab;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 4px;
+      letter-spacing: -2px;
+      transition: color 0.15s;
+    }
+
+    .drag-handle:hover {
+      color: var(--text-color);
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
     }
 
     .color-dot {
@@ -491,39 +495,6 @@
     .segmented-control input[type="radio"]:focus-visible + label {
       outline: 2px solid var(--primary, #1a73e8);
       outline-offset: 1px;
-    }
-
-    .priority-controls {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      margin-right: 4px;
-    }
-
-    .move-btn {
-      background: #fff;
-      border: 1px solid var(--border-color);
-      border-radius: 3px;
-      padding: 1px 5px;
-      cursor: pointer;
-      font-size: 10px;
-      line-height: 1;
-      color: var(--text-secondary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color 0.15s, color 0.15s;
-    }
-
-    .move-btn:hover:not(:disabled) {
-      background: #e8f0fe;
-      color: var(--primary-color);
-      border-color: #c2e7ff;
-    }
-
-    .move-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
     }
 
     .rule-actions {
@@ -749,7 +720,7 @@
             <label for="ordering-alphabetical" title="Sort tab groups alphabetically A-Z by name">Alphabetical</label>
           </div>
         </div>
-        <span class="ordering-hint" id="ordering-hint">Manual: drag & drop or ▲/▼ to arrange tab groups</span>
+        <span class="ordering-hint" id="ordering-hint">Manual: drag to arrange tab groups</span>
       </div>
 
       <div id="rules-container" class="rules-list">
