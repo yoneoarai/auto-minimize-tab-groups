@@ -349,8 +349,18 @@ export class BrowserAdapter implements IBrowserAdapter {
   }
 
   // ==========================================================================
-  // Action Badge & Commands
+  // Action Badge, Icon & Commands
   // ==========================================================================
+
+  public async setIcon(details: { path: string | Record<number, string> }): Promise<void> {
+    const actionApi = this.api?.action ?? this.api?.browserAction;
+    if (actionApi?.setIcon) {
+      const res = actionApi.setIcon(details);
+      if (res && typeof res.then === 'function') {
+        return await res;
+      }
+    }
+  }
 
   public async setBadgeText(details: { text: string }): Promise<void> {
     const actionApi = this.api?.action ?? this.api?.browserAction;

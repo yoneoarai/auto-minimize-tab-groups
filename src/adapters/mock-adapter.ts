@@ -21,6 +21,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   public badgeText = '';
   public badgeColor = '';
   public optionsPageOpened = false;
+  public currentIcon: any = null;
   private nextGroupId = 100;
 
   private storageChangeListeners: Array<(changes: Record<string, StorageChange>) => void> = [];
@@ -239,6 +240,10 @@ export class MockBrowserAdapter implements IBrowserAdapter {
 
   public onInstalled(callback: (details: InstalledDetails) => void): void {
     this.installedListeners.push(callback);
+  }
+
+  public async setIcon(details: { path: string | Record<number, string> }): Promise<void> {
+    this.currentIcon = details.path;
   }
 
   public async setBadgeText(details: { text: string }): Promise<void> {

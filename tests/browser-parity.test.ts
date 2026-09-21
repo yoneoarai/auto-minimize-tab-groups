@@ -65,6 +65,12 @@ describe('Cross-Browser Parity & UX Consistency', () => {
         const iconPath = path.resolve(__dirname, '..', chromeManifest.action.default_icon[size]);
         expect(fs.existsSync(iconPath)).toBe(true);
       }
+
+      // Verify paused icons exist on disk
+      for (const size of ['16', '32', '48', '96', '128']) {
+        const pausedIconPath = path.resolve(__dirname, '..', `icons/icon-paused-${size}.png`);
+        expect(fs.existsSync(pausedIconPath)).toBe(true);
+      }
     });
 
     it('enforces required browser-specific platform declarations', () => {

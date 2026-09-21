@@ -14,21 +14,46 @@ const tabOrganizer = new TabOrganizer(browserAdapter, configManager, RuleEngine)
 let initialized = false;
 
 /**
- * Updates toolbar action badge to reflect paused/disabled states.
+ * Updates toolbar action icon and badge to reflect paused/disabled states.
  */
 async function updateActionBadge(config = configManager.getConfig()): Promise<void> {
   try {
     if (!config.enabled) {
+      await browserAdapter.setIcon?.({
+        path: {
+          16: 'icons/icon-16.png',
+          32: 'icons/icon-32.png',
+          48: 'icons/icon-48.png',
+          128: 'icons/icon-128.png',
+        },
+      });
       await browserAdapter.setBadgeText?.({ text: 'OFF' });
       await browserAdapter.setBadgeBackgroundColor?.({ color: '#5f6368' });
     } else if (config.collapsePaused) {
-      await browserAdapter.setBadgeText?.({ text: 'PAUSE' });
-      await browserAdapter.setBadgeBackgroundColor?.({ color: '#f9ab00' });
+      // Swap to red paused icon and clear text badge
+      await browserAdapter.setIcon?.({
+        path: {
+          16: 'icons/icon-paused-16.png',
+          32: 'icons/icon-paused-32.png',
+          48: 'icons/icon-paused-48.png',
+          128: 'icons/icon-paused-128.png',
+        },
+      });
+      await browserAdapter.setBadgeText?.({ text: '' });
     } else {
+      // Restore standard icon and clear badge
+      await browserAdapter.setIcon?.({
+        path: {
+          16: 'icons/icon-16.png',
+          32: 'icons/icon-32.png',
+          48: 'icons/icon-48.png',
+          128: 'icons/icon-128.png',
+        },
+      });
       await browserAdapter.setBadgeText?.({ text: '' });
     }
   } catch {
-    // Non-fatal if badge cannot be updated
+    // Non-fatal if badge or icon cannot be updated
   }
 }
 

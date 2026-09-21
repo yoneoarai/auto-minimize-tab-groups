@@ -85,7 +85,8 @@ export interface IBrowserAdapter {
   setStorage(items: Record<string, any>): Promise<void>;
   onStorageChanged(callback: (changes: Record<string, StorageChange>) => void): void;
 
-  // Action Badge & Commands
+  // Action Badge, Icon & Commands
+  setIcon?(details: { path: string | Record<number, string> }): Promise<void>;
   setBadgeText?(details: { text: string }): Promise<void>;
   setBadgeBackgroundColor?(details: { color: string }): Promise<void>;
   onCommand?(callback: (command: string) => void): void;

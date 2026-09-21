@@ -205,6 +205,22 @@ describe('BrowserAdapter unit tests and edge cases', () => {
       expect(setBadgeColorArgs).toEqual({ color: '#f9ab00' });
     });
 
+    it('setIcon calls action.setIcon with path dictionary', async () => {
+      let setIconArgs: any;
+      const customApi = {
+        action: {
+          setIcon: (details: any) => {
+            setIconArgs = details;
+            return Promise.resolve();
+          },
+        },
+      };
+
+      const adapter = new BrowserAdapter(customApi);
+      await adapter.setIcon!({ path: { 16: 'icons/icon-paused-16.png' } });
+      expect(setIconArgs).toEqual({ path: { 16: 'icons/icon-paused-16.png' } });
+    });
+
     it('onCommand registers listener on commands.onCommand', () => {
       let registeredListener: any;
       const customApi = {
