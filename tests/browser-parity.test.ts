@@ -38,6 +38,7 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       expect(sortedChromePerms).toContain('tabGroups');
       expect(sortedChromePerms).toContain('storage');
       expect(sortedChromePerms).toContain('tabs');
+      expect(sortedChromePerms).toContain('alarms');
     });
 
     it('has identical options UI configuration', () => {
@@ -112,8 +113,12 @@ describe('Cross-Browser Parity & UX Consistency', () => {
         'default-timeout-input',
         'add-rule-btn',
         'rules-container',
+        'rules-section',
+        'auto-group-toggle',
         'ordering-manual',
         'ordering-alphabetical',
+        'insert-pos-end',
+        'insert-pos-front',
         'catch-all-toggle',
         'reorganize-on-change',
         'export-btn',
@@ -179,8 +184,8 @@ describe('Cross-Browser Parity & UX Consistency', () => {
     it('options.html and popup.html both support native dark mode and version footers', () => {
       expect(optionsHtml).toContain('@media (prefers-color-scheme: dark)');
       expect(popupHtml).toContain('@media (prefers-color-scheme: dark)');
-      expect(optionsHtml).toContain('Tabbi — Tab Group Manager v1.1.0');
-      expect(popupHtml).toContain('Tabbi v1.1.0');
+      expect(optionsHtml).toContain('Tabbi — Tab Group Manager v1.2.0');
+      expect(popupHtml).toContain('Tabbi v1.2.0');
     });
 
     it('options.html defines accurate tab group color palette and accessible toast', () => {
@@ -213,6 +218,7 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       const storageData: Record<string, any> = {};
       const groups = new Map<number, BrowserTabGroup>();
       const tabs = new Map<number, BrowserTab>();
+      const alarmsMap = new Map<string, any>();
 
       tabs.set(1, { id: 1, windowId: 10, url: 'https://google.com', active: true, pinned: false });
       tabs.set(2, { id: 2, windowId: 10, url: 'https://github.com', active: false, pinned: false });
@@ -300,6 +306,26 @@ describe('Cross-Browser Parity & UX Consistency', () => {
             }),
           },
           onChanged: { addListener: jest.fn() },
+        },
+        alarms: {
+          create: jest.fn((name: string, alarmInfo: any) => {
+            alarmsMap.set(name, {
+              name,
+              scheduledTime: alarmInfo.when ?? (Date.now() + (alarmInfo.delayInMinutes ?? 0) * 60000),
+              periodInMinutes: alarmInfo.periodInMinutes,
+            });
+            return Promise.resolve();
+          }),
+          clear: jest.fn((name: string) => {
+            const existed = alarmsMap.delete(name);
+            return Promise.resolve(existed);
+          }),
+          get: jest.fn((name: string) => {
+            return Promise.resolve(alarmsMap.get(name) || null);
+          }),
+          onAlarm: {
+            addListener: jest.fn(),
+          },
         },
         permissions: {
           contains: jest.fn(() => Promise.resolve(true)),
@@ -400,6 +426,50 @@ describe('Cross-Browser Parity & UX Consistency', () => {
       const firefoxAdapter = new BrowserAdapter();
 
       await expect(firefoxAdapter.getTab(999)).rejects.toThrow('No tab with id: 999');
+    });
+
+    it('performs identical alarm lifecycle operations under both Chrome and Firefox', async () => {
+      // 1. Chrome
+      const chromeApi = createChromeMock();
+      (globalThis as any).chrome = chromeApi;
+      delete (globalThis as any).browser;
+
+      const chromeAdapter = new BrowserAdapter();
+      const alarmCallbackChrome = jest.fn();
+      chromeAdapter.onAlarm(alarmCallbackChrome);
+      expect(chromeApi.alarms.onAlarm.addListener).toHaveBeenCalledWith(alarmCallbackChrome);
+
+      await chromeAdapter.createAlarm('group_timer_100', { when: 1234567890 });
+      const chromeAlarm = await chromeAdapter.getAlarm('group_timer_100');
+      const chromeCleared = await chromeAdapter.clearAlarm('group_timer_100');
+      const chromeAfterClear = await chromeAdapter.getAlarm('group_timer_100');
+
+      // 2. Firefox
+      const firefoxApi = createFirefoxMock();
+      delete (globalThis as any).chrome;
+      (globalThis as any).browser = firefoxApi;
+
+      const firefoxAdapter = new BrowserAdapter();
+      const alarmCallbackFirefox = jest.fn();
+      firefoxAdapter.onAlarm(alarmCallbackFirefox);
+      expect(firefoxApi.alarms.onAlarm.addListener).toHaveBeenCalledWith(alarmCallbackFirefox);
+
+      await firefoxAdapter.createAlarm('group_timer_100', { when: 1234567890 });
+      const firefoxAlarm = await firefoxAdapter.getAlarm('group_timer_100');
+      const firefoxCleared = await firefoxAdapter.clearAlarm('group_timer_100');
+      const firefoxAfterClear = await firefoxAdapter.getAlarm('group_timer_100');
+
+      // Verify identical results
+      expect(chromeAlarm).toEqual(firefoxAlarm);
+      expect(chromeAlarm).toEqual({
+        name: 'group_timer_100',
+        scheduledTime: 1234567890,
+        periodInMinutes: undefined,
+      });
+      expect(chromeCleared).toBe(true);
+      expect(firefoxCleared).toBe(true);
+      expect(chromeAfterClear).toBeNull();
+      expect(firefoxAfterClear).toBeNull();
     });
   });
 });

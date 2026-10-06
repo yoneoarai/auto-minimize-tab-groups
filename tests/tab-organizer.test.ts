@@ -29,6 +29,12 @@ describe('TabOrganizer', () => {
       patterns: ['google.com', '*.google.com'],
       collapse: { enabled: true, timeoutMs: 10000 },
     });
+
+    await configManager.setGroupingDelayMs(0);
+  });
+
+  afterEach(() => {
+    organizer.clearPendingTimers();
   });
 
   describe('Tab grouping', () => {
@@ -112,6 +118,106 @@ describe('TabOrganizer', () => {
 
       expect((await mockAdapter.getTab(5)).groupId ?? -1).toBe(-1);
       expect((await mockAdapter.getTab(6)).groupId ?? -1).toBe(-1);
+    });
+  });
+
+  describe('In-group tab positioning (tabInsertPosition)', () => {
+    it('places new tabs at the end of the group when tabInsertPosition is end', async () => {
+      await configManager.setTabInsertPosition('end');
+
+      const tab1 = { id: 1, windowId: 1, index: 0, url: 'https://github.com/repo1', active: false };
+      const tab2 = { id: 2, windowId: 1, index: 1, url: 'https://github.com/repo2', active: false };
+      mockAdapter.tabs.set(1, tab1);
+      mockAdapter.tabs.set(2, tab2);
+
+      await organizer.organizeTab(tab1);
+      await organizer.organizeTab(tab2);
+
+      const t1 = await mockAdapter.getTab(1);
+      const t2 = await mockAdapter.getTab(2);
+
+      expect(t1.groupId).toBe(t2.groupId);
+      expect(t1.index).toBe(0);
+      expect(t2.index).toBe(1);
+    });
+
+    it('places new tabs at the front of the group when tabInsertPosition is front', async () => {
+      await configManager.setTabInsertPosition('front');
+
+      const tab1 = { id: 1, windowId: 1, index: 0, url: 'https://github.com/repo1', active: false };
+      mockAdapter.tabs.set(1, tab1);
+      await organizer.organizeTab(tab1);
+
+      const tab2 = { id: 2, windowId: 1, index: 1, url: 'https://github.com/repo2', active: false };
+      mockAdapter.tabs.set(2, tab2);
+      await organizer.organizeTab(tab2);
+
+      let t1 = await mockAdapter.getTab(1);
+      let t2 = await mockAdapter.getTab(2);
+
+      expect(t1.groupId).toBe(t2.groupId);
+      expect(t2.index).toBe(0);
+      expect(t1.index).toBe(1);
+
+      const tab3 = { id: 3, windowId: 1, index: 2, url: 'https://github.com/repo3', active: false };
+      mockAdapter.tabs.set(3, tab3);
+      await organizer.organizeTab(tab3);
+
+      t1 = await mockAdapter.getTab(1);
+      t2 = await mockAdapter.getTab(2);
+      const t3 = await mockAdapter.getTab(3);
+
+      expect(t3.index).toBe(0);
+      expect(t2.index).toBe(1);
+      expect(t1.index).toBe(2);
+    });
+
+    it('only positions tabs on initial group addition and preserves internal ordering if already in group', async () => {
+      await configManager.setTabInsertPosition('front');
+
+      const tab1 = { id: 1, windowId: 1, index: 0, url: 'https://github.com/repo1', active: false };
+      const tab2 = { id: 2, windowId: 1, index: 1, url: 'https://github.com/repo2', active: false };
+      mockAdapter.tabs.set(1, tab1);
+      mockAdapter.tabs.set(2, tab2);
+
+      await organizer.organizeTab(tab1);
+      await organizer.organizeTab(tab2);
+
+      expect((await mockAdapter.getTab(2)).index).toBe(0);
+      expect((await mockAdapter.getTab(1)).index).toBe(1);
+
+      // Re-running organizeTab on tab1 (which is already in the group) does not reposition it
+      const updatedTab1 = await mockAdapter.getTab(1);
+      await organizer.organizeTab(updatedTab1);
+
+      expect((await mockAdapter.getTab(2)).index).toBe(0);
+      expect((await mockAdapter.getTab(1)).index).toBe(1);
+    });
+
+    it('preserves manually rearranged tabs inside a group', async () => {
+      await configManager.setTabInsertPosition('front');
+
+      const tab1 = { id: 1, windowId: 1, index: 0, url: 'https://github.com/repo1', active: false };
+      const tab2 = { id: 2, windowId: 1, index: 1, url: 'https://github.com/repo2', active: false };
+      mockAdapter.tabs.set(1, tab1);
+      mockAdapter.tabs.set(2, tab2);
+
+      await organizer.organizeTab(tab1);
+      await organizer.organizeTab(tab2);
+
+      expect((await mockAdapter.getTab(2)).index).toBe(0);
+      expect((await mockAdapter.getTab(1)).index).toBe(1);
+
+      // User manually drags tab2 behind tab1
+      await mockAdapter.moveTab(2, { index: 1 });
+      expect((await mockAdapter.getTab(1)).index).toBe(0);
+      expect((await mockAdapter.getTab(2)).index).toBe(1);
+
+      // Running organizeAllTabs does not disrupt manual in-group ordering
+      await organizer.organizeAllTabs(1);
+
+      expect((await mockAdapter.getTab(1)).index).toBe(0);
+      expect((await mockAdapter.getTab(2)).index).toBe(1);
     });
   });
 
@@ -273,9 +379,9 @@ describe('TabOrganizer', () => {
   });
 
   describe('Group ordering on creation & organization', () => {
-    it('positions newly created group according to manual order instead of leaving it at the end', async () => {
-      // Configure manual ordering
-      await configManager.setGroupOrdering('manual');
+    it('positions newly created group according to rule order when rules ordering is enabled', async () => {
+      // Configure rule ordering
+      await configManager.setGroupOrdering('rules');
 
       // Rule 0 is GitHub (order 0), Rule 1 is Google (order 1)
       // First, create Google tab at index 0 (Google group created at index 0)
@@ -305,6 +411,45 @@ describe('TabOrganizer', () => {
       expect(tab101After.index).toBe(1);
     });
 
+    it('does NOT reorder or shift tab groups when groupOrdering is set to manual', async () => {
+      await configManager.setGroupOrdering('manual');
+
+      // First create Google tab at index 0 (Google group at index 0)
+      const googleTab = { id: 103, windowId: 1, url: 'https://google.com', active: false, index: 0 };
+      mockAdapter.tabs.set(103, googleTab);
+      await organizer.organizeTab(googleTab);
+
+      // Create GitHub tab at index 5
+      const githubTab = { id: 104, windowId: 1, url: 'https://github.com/repo', active: false, index: 5 };
+      mockAdapter.tabs.set(104, githubTab);
+      await organizer.organizeTab(githubTab);
+
+      // In manual mode, Tabbi does NOT force group positions!
+      const tab103After = await mockAdapter.getTab(103);
+      const tab104After = await mockAdapter.getTab(104);
+
+      expect(tab103After.index).toBe(0);
+      expect(tab104After.index).toBe(5);
+    });
+
+    it('does NOT reorder or shift tab groups when groupOrdering is set to none', async () => {
+      await configManager.setGroupOrdering('none');
+
+      const googleTab = { id: 105, windowId: 1, url: 'https://google.com', active: false, index: 0 };
+      mockAdapter.tabs.set(105, googleTab);
+      await organizer.organizeTab(googleTab);
+
+      const githubTab = { id: 106, windowId: 1, url: 'https://github.com/repo', active: false, index: 5 };
+      mockAdapter.tabs.set(106, githubTab);
+      await organizer.organizeTab(githubTab);
+
+      const tab105After = await mockAdapter.getTab(105);
+      const tab106After = await mockAdapter.getTab(106);
+
+      expect(tab105After.index).toBe(0);
+      expect(tab106After.index).toBe(5);
+    });
+
     it('positions newly created groups alphabetically when alphabetical ordering is enabled', async () => {
       await configManager.setGroupOrdering('alphabetical');
 
@@ -325,6 +470,169 @@ describe('TabOrganizer', () => {
       expect(tab202After.index).toBeLessThan(tab201After.index!);
       expect(tab202After.index).toBe(0);
       expect(tab201After.index).toBe(1);
+    });
+  });
+
+  describe('Auto-Group Tabs disabled (collapse groups only)', () => {
+    it('does not group tabs when autoGroupTabs is false', async () => {
+      await configManager.setAutoGroupEnabled(false);
+
+      const tab = { id: 301, windowId: 1, url: 'https://github.com/repo', active: false };
+      mockAdapter.tabs.set(301, tab);
+
+      await organizer.organizeTab(tab);
+      const result = await mockAdapter.getTab(301);
+      expect(result.groupId ?? -1).toBe(-1);
+    });
+
+    it('does not group tabs in handleTabCreated when autoGroupTabs is false', async () => {
+      await configManager.setAutoGroupEnabled(false);
+
+      const tab = { id: 302, windowId: 1, url: 'https://github.com/repo', active: false };
+      mockAdapter.tabs.set(302, tab);
+
+      await organizer.handleTabCreated(tab);
+      const result = await mockAdapter.getTab(302);
+      expect(result.groupId ?? -1).toBe(-1);
+    });
+
+    it('does not group tabs in handleTabUpdated when autoGroupTabs is false', async () => {
+      await configManager.setAutoGroupEnabled(false);
+
+      const tab = { id: 303, windowId: 1, url: 'chrome://newtab', active: false };
+      mockAdapter.tabs.set(303, tab);
+
+      await organizer.handleTabUpdated(303, { url: 'https://github.com/repo' }, { ...tab, url: 'https://github.com/repo' });
+      const result = await mockAdapter.getTab(303);
+      expect(result.groupId ?? -1).toBe(-1);
+    });
+
+    it('does not group tabs in organizeAllTabs when autoGroupTabs is false', async () => {
+      await configManager.setAutoGroupEnabled(false);
+
+      mockAdapter.tabs.set(304, { id: 304, windowId: 1, url: 'https://github.com/repo', active: false });
+      await organizer.organizeAllTabs(1);
+
+      const result = await mockAdapter.getTab(304);
+      expect(result.groupId ?? -1).toBe(-1);
+    });
+  });
+
+  describe('Navigation Debounce & Grouping Delay', () => {
+    it('debounces rapid URL changes (e.g. redirect chain) and only assigns final URL to group', async () => {
+      await configManager.setGroupingDelayMs(200);
+
+      // Tab initially created
+      const tab = { id: 401, windowId: 1, url: 'https://github.com/app', active: true };
+      mockAdapter.tabs.set(401, tab);
+
+      // Rapid navigation: github -> intermediate okta SSO -> back to github with auth token
+      await organizer.handleTabUpdated(401, { url: 'https://github.com/app' }, tab);
+      expect(organizer.hasPendingDebounce(401)).toBe(true);
+
+      // Immediate redirect to Okta (before 200ms debounce fires)
+      const oktaTab = { ...tab, url: 'https://company.okta.com/oauth/login' };
+      mockAdapter.tabs.set(401, oktaTab);
+      await organizer.handleTabUpdated(401, { url: 'https://company.okta.com/oauth/login' }, oktaTab);
+
+      // Immediate redirect back to GitHub
+      const finalTab = { ...tab, url: 'https://github.com/app/dashboard' };
+      mockAdapter.tabs.set(401, finalTab);
+      await organizer.handleTabUpdated(401, { url: 'https://github.com/app/dashboard' }, finalTab);
+
+      // Tab is still pending debounce, not grouped prematurely
+      expect((await mockAdapter.getTab(401)).groupId ?? -1).toBe(-1);
+
+      // Flush debounce
+      await organizer.flushPendingDebounces();
+
+      const finalResult = await mockAdapter.getTab(401);
+      expect(finalResult.groupId).toBeDefined();
+      expect(finalResult.groupId).not.toBe(-1);
+      const group = await mockAdapter.getTabGroup(finalResult.groupId!);
+      expect(group.title).toBe('GitHub');
+    });
+
+    it('cancels pending debounce if tab is closed before timer expires', async () => {
+      await configManager.setGroupingDelayMs(500);
+
+      const tab = { id: 402, windowId: 1, url: 'https://github.com/app', active: true };
+      mockAdapter.tabs.set(402, tab);
+
+      await organizer.handleTabUpdated(402, { url: 'https://github.com/app' }, tab);
+      expect(organizer.hasPendingDebounce(402)).toBe(true);
+
+      organizer.handleTabRemoved(402);
+      expect(organizer.hasPendingDebounce(402)).toBe(false);
+    });
+
+    it('cancels pending debounce if tab is pinned before timer expires', async () => {
+      await configManager.setGroupingDelayMs(500);
+
+      const tab = { id: 403, windowId: 1, url: 'https://github.com/app', active: true };
+      mockAdapter.tabs.set(403, tab);
+
+      await organizer.handleTabUpdated(403, { url: 'https://github.com/app' }, tab);
+      expect(organizer.hasPendingDebounce(403)).toBe(true);
+
+      await organizer.handleTabUpdated(403, { pinned: true }, { ...tab, pinned: true });
+      expect(organizer.hasPendingDebounce(403)).toBe(false);
+    });
+  });
+
+  describe('Sticky Auth & SSO Redirect Protection', () => {
+    it('keeps already-grouped tab in its group when redirected to SSO/auth endpoint', async () => {
+      // 1. Group tab under GitHub
+      const tab = { id: 501, windowId: 1, url: 'https://github.com/myrepo', active: true };
+      mockAdapter.tabs.set(501, tab);
+      await organizer.organizeTab(tab);
+
+      const initialTab = await mockAdapter.getTab(501);
+      const gitHubGroupId = initialTab.groupId;
+      expect(gitHubGroupId).toBeDefined();
+      expect(gitHubGroupId).not.toBe(-1);
+
+      // Add rule for Okta
+      await configManager.addRule({
+        name: 'Okta',
+        color: 'blue',
+        patterns: ['okta.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+
+      // 2. Tab in GitHub group redirects to Okta SSO
+      const ssoTab = { ...initialTab, url: 'https://mycompany.okta.com/login/sso' };
+      mockAdapter.tabs.set(501, ssoTab);
+
+      // Call organizeTab on the SSO URL
+      await organizer.organizeTab(ssoTab);
+
+      // Tab should NOT be moved into Okta group! It stays in GitHub group!
+      const tabAfterSso = await mockAdapter.getTab(501);
+      expect(tabAfterSso.groupId).toBe(gitHubGroupId);
+      const currentGroup = await mockAdapter.getTabGroup(tabAfterSso.groupId!);
+      expect(currentGroup.title).toBe('GitHub');
+    });
+
+    it('groups standalone tab navigating to SSO endpoint if tab was not previously in a group', async () => {
+      await configManager.addRule({
+        name: 'Okta',
+        color: 'blue',
+        patterns: ['okta.com'],
+        collapse: { enabled: true, timeoutMs: null },
+      });
+
+      // Standalone new tab directly opened to Okta (not grouped)
+      const tab = { id: 502, windowId: 1, url: 'https://mycompany.okta.com/login', active: true, groupId: -1 };
+      mockAdapter.tabs.set(502, tab);
+
+      await organizer.organizeTab(tab);
+
+      const result = await mockAdapter.getTab(502);
+      expect(result.groupId).toBeDefined();
+      expect(result.groupId).not.toBe(-1);
+      const group = await mockAdapter.getTabGroup(result.groupId!);
+      expect(group.title).toBe('Okta');
     });
   });
 });

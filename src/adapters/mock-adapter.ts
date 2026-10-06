@@ -8,6 +8,7 @@ import {
   TabRemoveInfo,
   StorageChange,
   InstalledDetails,
+  BrowserAlarm,
 } from '../types/browser';
 
 export class MockBrowserAdapter implements IBrowserAdapter {
@@ -22,6 +23,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   public badgeColor = '';
   public optionsPageOpened = false;
   public currentIcon: any = null;
+  public alarms: Map<string, BrowserAlarm> = new Map();
   private nextGroupId = 100;
 
   private storageChangeListeners: Array<(changes: Record<string, StorageChange>) => void> = [];
@@ -34,6 +36,7 @@ export class MockBrowserAdapter implements IBrowserAdapter {
   private startupListeners: Array<() => void> = [];
   private installedListeners: Array<(details: InstalledDetails) => void> = [];
   private commandListeners: Array<(command: string) => void> = [];
+  private alarmListeners: Array<(alarm: BrowserAlarm) => void> = [];
 
   // ==========================================================================
   // Tabs API
@@ -92,6 +95,38 @@ export class MockBrowserAdapter implements IBrowserAdapter {
         color: 'grey',
       };
       this.groups.set(targetGroupId, newGroup);
+    } else {
+      // In Chrome, adding tabs to an existing group places them at the end of that group
+      const existingInGroup = Array.from(this.tabs.values())
+        .filter((t) => t.groupId === targetGroupId && !options.tabIds.includes(t.id!))
+        .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+      if (existingInGroup.length > 0) {
+        const lastGroupTab = existingInGroup[existingInGroup.length - 1];
+        let targetIndex = (lastGroupTab.index ?? 0) + 1;
+        for (const tabId of options.tabIds) {
+          const t = this.tabs.get(tabId);
+          if (t) {
+            t.groupId = targetGroupId;
+            const winId = t.windowId ?? 1;
+            const winTabs = Array.from(this.tabs.values())
+              .filter((tab) => (tab.windowId ?? 1) === winId)
+              .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+            const curIdx = winTabs.findIndex((tab) => tab.id === tabId);
+            if (curIdx !== -1) {
+              winTabs.splice(curIdx, 1);
+            }
+            const insIdx = Math.max(0, Math.min(targetIndex, winTabs.length));
+            winTabs.splice(insIdx, 0, t);
+            winTabs.forEach((tab, idx) => {
+              tab.index = idx;
+              this.tabs.set(tab.id!, { ...tab });
+            });
+            targetIndex++;
+          }
+        }
+        return targetGroupId;
+      }
     }
 
     for (const tabId of options.tabIds) {
@@ -113,6 +148,37 @@ export class MockBrowserAdapter implements IBrowserAdapter {
         this.tabs.set(tabId, { ...tab });
       }
     }
+  }
+
+  public async moveTab(
+    tabId: number,
+    moveProperties: { index: number; windowId?: number }
+  ): Promise<BrowserTab> {
+    const tab = this.tabs.get(tabId);
+    if (!tab) {
+      throw new Error(`Tab ${tabId} not found`);
+    }
+    const winId = moveProperties.windowId ?? tab.windowId ?? 1;
+    const winTabs = Array.from(this.tabs.values())
+      .filter((t) => (t.windowId ?? 1) === winId)
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+    const currentIndex = winTabs.findIndex((t) => t.id === tabId);
+    if (currentIndex !== -1) {
+      winTabs.splice(currentIndex, 1);
+    }
+
+    let targetIdx = moveProperties.index === -1 ? winTabs.length : moveProperties.index;
+    targetIdx = Math.max(0, Math.min(targetIdx, winTabs.length));
+    winTabs.splice(targetIdx, 0, tab);
+
+    winTabs.forEach((t, idx) => {
+      t.index = idx;
+      this.tabs.set(t.id!, { ...t });
+    });
+
+    const updatedTab = this.tabs.get(tabId)!;
+    return { ...updatedTab };
   }
 
   // ==========================================================================
@@ -182,6 +248,40 @@ export class MockBrowserAdapter implements IBrowserAdapter {
 
   public async hasPermission(permissions: string[]): Promise<boolean> {
     return permissions.every((p) => this.grantedPermissions.has(p));
+  }
+
+  // ==========================================================================
+  // Alarms API (MV3 Service Worker Background Timers)
+  // ==========================================================================
+
+  public async createAlarm(
+    name: string,
+    alarmInfo: { when?: number; delayInMinutes?: number; periodInMinutes?: number }
+  ): Promise<void> {
+    const scheduledTime = alarmInfo.when ?? (Date.now() + (alarmInfo.delayInMinutes ?? 0) * 60000);
+    this.alarms.set(name, { name, scheduledTime });
+  }
+
+  public async clearAlarm(name: string): Promise<boolean> {
+    const existed = this.alarms.has(name);
+    this.alarms.delete(name);
+    return existed;
+  }
+
+  public async getAlarm(name: string): Promise<BrowserAlarm | null> {
+    return this.alarms.get(name) || null;
+  }
+
+  public onAlarm(callback: (alarm: BrowserAlarm) => void): void {
+    this.alarmListeners.push(callback);
+  }
+
+  public triggerAlarm(name: string): void {
+    const alarm = this.alarms.get(name);
+    if (alarm) {
+      this.alarms.delete(name);
+      this.alarmListeners.forEach((l) => l(alarm));
+    }
   }
 
   // ==========================================================================

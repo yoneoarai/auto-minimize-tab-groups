@@ -502,4 +502,104 @@ describe('GroupManager', () => {
       expect(groupManager.getGroupState(groupId)).toBeUndefined();
     });
   });
+
+  // ==========================================================================
+  // MV3 Persistent Alarms & Long Timeout Support (e.g. 600s / 10min)
+  // ==========================================================================
+  describe('MV3 Persistent Alarms & Long Timeout Support', () => {
+    it('schedules a persistent browser alarm when setting a group timer', async () => {
+      const groupId = 901;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(91, { id: 91, groupId, windowId: 1, active: false });
+
+      const timeout600s = 600000;
+      groupManager.setGroupTimer(groupId, 1, timeout600s);
+
+      // In-memory timer is set
+      expect(groupManager.getGroupState(groupId)?.timer).not.toBeNull();
+
+      // Persistent alarm is scheduled for MV3 service worker
+      const alarm = await mockAdapter.getAlarm(`collapse_group_${groupId}`);
+      expect(alarm).not.toBeNull();
+      expect(alarm?.name).toBe(`collapse_group_${groupId}`);
+      expect(alarm?.scheduledTime).toBeGreaterThanOrEqual(Date.now() + timeout600s - 100);
+    });
+
+    it('clears persistent alarm when a group is activated or timer is removed', async () => {
+      const groupId = 902;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(92, { id: 92, groupId, windowId: 1, active: false });
+
+      groupManager.setGroupTimer(groupId, 1, 600000);
+      expect(await mockAdapter.getAlarm(`collapse_group_${groupId}`)).not.toBeNull();
+
+      // Clear timer
+      groupManager.clearGroupTimer(groupId);
+      expect(await mockAdapter.getAlarm(`collapse_group_${groupId}`)).toBeNull();
+
+      // Re-set and remove timer
+      groupManager.setGroupTimer(groupId, 1, 600000);
+      expect(await mockAdapter.getAlarm(`collapse_group_${groupId}`)).not.toBeNull();
+
+      groupManager.removeGroupTimer(groupId);
+      expect(await mockAdapter.getAlarm(`collapse_group_${groupId}`)).toBeNull();
+    });
+
+    it('collapses group when alarm fires even if in-memory service worker state was reset', async () => {
+      const groupId = 903;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(93, { id: 93, groupId, windowId: 1, active: false });
+
+      groupManager.setGroupTimer(groupId, 1, 600000);
+
+      // Simulate MV3 service worker termination (all memory state wiped)
+      const freshGroupManager = new GroupManager(mockAdapter, configManager);
+
+      // The browser alarm triggers when the timeout arrives
+      await freshGroupManager.handleAlarmFired(groupId);
+
+      const group = await mockAdapter.getTabGroup(groupId);
+      expect(group.collapsed).toBe(true);
+    });
+
+    it('preserves existing alarm scheduled time on worker wakeup instead of resetting countdown', async () => {
+      const groupId = 904;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(94, { id: 94, groupId, windowId: 1, active: false });
+
+      const startTime = Date.now();
+      const totalTimeout = 600000; // 10 minutes
+      groupManager.setGroupTimer(groupId, 1, totalTimeout);
+
+      // 4 minutes pass, worker wakes up from sleep
+      jest.advanceTimersByTime(240000);
+
+      // Worker re-evaluates groups on wakeup
+      await groupManager.refreshGroupTimers();
+
+      // The remaining time should be ~360,000ms (6 minutes), NOT reset back to 600,000ms
+      const alarm = await mockAdapter.getAlarm(`collapse_group_${groupId}`);
+      expect(alarm?.scheduledTime).toBe(startTime + totalTimeout);
+
+      // Advance remaining 360,000ms
+      await jest.advanceTimersByTimeAsync(360000);
+
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+    });
+
+    it('immediately collapses group if alarm time passed while worker was sleeping', async () => {
+      const groupId = 905;
+      mockAdapter.groups.set(groupId, { id: groupId, collapsed: false, windowId: 1 });
+      mockAdapter.tabs.set(95, { id: 95, groupId, windowId: 1, active: false });
+
+      // Alarm was scheduled in the past
+      await mockAdapter.createAlarm(`collapse_group_${groupId}`, { when: Date.now() - 5000 });
+
+      // Service worker boots and refreshes groups
+      await groupManager.refreshGroupTimers();
+
+      // Group should be immediately collapsed since alarm is overdue
+      expect((await mockAdapter.getTabGroup(groupId)).collapsed).toBe(true);
+    });
+  });
 });

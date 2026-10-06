@@ -344,4 +344,32 @@ describe('RuleEngine', () => {
       });
     });
   });
+
+  describe('isAuthUrl detection', () => {
+    it('identifies common SSO and identity provider domains', () => {
+      expect(RuleEngine.isAuthUrl('https://mycompany.okta.com/login/sso')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://auth.company.auth0.com/oauth/token')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://accounts.google.com/o/oauth2/auth')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://login.microsoftonline.com/common/oauth2')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://identity.example.com/saml/login')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://signin.aws.amazon.com/oauth')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://company.onelogin.com/trust/saml2/http-post/sso')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://sso.connect.pingidentity.com/')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://api.duosecurity.com/frame/prompt')).toBe(true);
+    });
+
+    it('identifies OAuth, SAML, and SSO endpoints in path', () => {
+      expect(RuleEngine.isAuthUrl('https://github.com/login/oauth/authorize')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://app.slack.com/sso/saml/start')).toBe(true);
+      expect(RuleEngine.isAuthUrl('https://jira.company.com/plugins/servlet/saml/auth')).toBe(true);
+    });
+
+    it('returns false for non-auth regular websites', () => {
+      expect(RuleEngine.isAuthUrl('https://github.com/myorg/myrepo')).toBe(false);
+      expect(RuleEngine.isAuthUrl('https://google.com/search?q=tabbi')).toBe(false);
+      expect(RuleEngine.isAuthUrl('https://developer.mozilla.org/en-US/docs/Web')).toBe(false);
+      expect(RuleEngine.isAuthUrl('')).toBe(false);
+      expect(RuleEngine.isAuthUrl(null as any)).toBe(false);
+    });
+  });
 });

@@ -20,6 +20,7 @@ export interface GroupState {
   isActive: boolean;
   windowId: number;
   justOpened?: number;
+  targetCollapseTime?: number;
 }
 
 export class GroupManager {
@@ -222,6 +223,7 @@ export class GroupManager {
 
     const initialSettings = this.getCollapseSettings(groupId);
     const timeoutDelay = customDelayMs ?? initialSettings.timeoutMs;
+    const targetCollapseTime = Date.now() + timeoutDelay;
 
     const timer = setTimeout(async () => {
       await this.handleTimerFired(groupId);
@@ -233,9 +235,15 @@ export class GroupManager {
       isActive: existingState ? existingState.isActive : groupId === this.activeGroupId,
       windowId,
       justOpened: existingState?.justOpened,
+      targetCollapseTime,
     };
 
     this.groupTimers.set(groupId, groupState);
+
+    // Schedule persistent browser alarm so collapse survives MV3 service worker termination
+    if (this.browserAdapter.createAlarm) {
+      this.browserAdapter.createAlarm(`collapse_group_${groupId}`, { when: targetCollapseTime }).catch(() => {});
+    }
 
     // If metadata was not cached yet, fetch it asynchronously
     if (!this.groupMetadata.has(groupId) && customDelayMs === undefined) {
@@ -260,6 +268,9 @@ export class GroupManager {
       clearTimeout(groupState.timer);
       groupState.timer = null;
     }
+    if (this.browserAdapter.clearAlarm) {
+      this.browserAdapter.clearAlarm(`collapse_group_${groupId}`).catch(() => {});
+    }
   }
 
   /**
@@ -271,6 +282,9 @@ export class GroupManager {
       clearTimeout(groupState.timer);
     }
     this.groupTimers.delete(groupId);
+    if (this.browserAdapter.clearAlarm) {
+      this.browserAdapter.clearAlarm(`collapse_group_${groupId}`).catch(() => {});
+    }
   }
 
   /**
@@ -329,9 +343,16 @@ export class GroupManager {
   }
 
   /**
+   * Handles alarm completion for a group triggered by browser alarm event.
+   */
+  public async handleAlarmFired(groupId: number): Promise<void> {
+    await this.handleTimerFired(groupId);
+  }
+
+  /**
    * Handles timer completion for a group.
    */
-  private async handleTimerFired(groupId: number): Promise<void> {
+  public async handleTimerFired(groupId: number): Promise<void> {
     try {
       const config = this.configManager.getConfig();
       if (config.enabled === false || config.collapsePaused === true) {
@@ -345,29 +366,39 @@ export class GroupManager {
         return;
       }
 
+      if (groupId === this.activeGroupId) {
+        return;
+      }
+
       const groupState = this.groupTimers.get(groupId);
-      if (!groupState || groupState.isActive || groupId === this.activeGroupId) {
+      if (groupState?.isActive) {
         return;
       }
 
       const groupTabs = await this.browserAdapter.queryTabs({ groupId });
+      if (groupTabs.length === 0) {
+        this.removeGroupTimer(groupId);
+        return;
+      }
+
       const hasActiveTabs = groupTabs.some((tab) => tab.active);
+      if (hasActiveTabs) {
+        this.setGroupActive(groupId, true, groupTabs[0].windowId);
+        this.clearGroupTimer(groupId);
+        return;
+      }
 
-      if (!hasActiveTabs && groupTabs.length > 0) {
-        const now = Date.now();
-        if (groupState.justOpened && now - groupState.justOpened < JUST_OPENED_GRACE_PERIOD_MS) {
-          const remainingGrace = JUST_OPENED_GRACE_PERIOD_MS - (now - groupState.justOpened);
-          delete groupState.justOpened;
-          this.setGroupTimer(groupId, groupState.windowId, Math.max(remainingGrace, 100));
-          return;
-        }
+      const now = Date.now();
+      if (groupState?.justOpened && now - groupState.justOpened < JUST_OPENED_GRACE_PERIOD_MS) {
+        const remainingGrace = JUST_OPENED_GRACE_PERIOD_MS - (now - groupState.justOpened);
+        delete groupState.justOpened;
+        this.setGroupTimer(groupId, groupState.windowId, Math.max(remainingGrace, 100));
+        return;
+      }
 
-        const group = await this.browserAdapter.getTabGroup(groupId);
-        if (!group.collapsed) {
-          await this.minimizeTabGroup(groupId);
-        } else {
-          this.removeGroupTimer(groupId);
-        }
+      const group = await this.browserAdapter.getTabGroup(groupId);
+      if (!group.collapsed) {
+        await this.minimizeTabGroup(groupId);
       } else {
         this.removeGroupTimer(groupId);
       }
@@ -411,9 +442,12 @@ export class GroupManager {
     try {
       const config = this.configManager.getConfig();
       if (config.enabled === false || config.collapsePaused === true) {
-        for (const [, state] of this.groupTimers) {
+        for (const [groupId, state] of this.groupTimers) {
           if (state.timer) {
             clearTimeout(state.timer);
+          }
+          if (this.browserAdapter.clearAlarm) {
+            this.browserAdapter.clearAlarm(`collapse_group_${groupId}`).catch(() => {});
           }
         }
         this.groupTimers.clear();
@@ -453,9 +487,29 @@ export class GroupManager {
               this.clearGroupTimer(groupId);
               this.setGroupActive(groupId, true, window.id);
             } else {
-              // Only start a timer if one is not already running, preventing timer resets
-              // during unrelated events (e.g. tabs opening/closing in other groups)
-              if (!existing?.timer) {
+              // Check if an alarm is already scheduled for this group (across service worker wakeups)
+              let existingAlarmTime: number | null = null;
+              if (this.browserAdapter.getAlarm) {
+                try {
+                  const alarm = await this.browserAdapter.getAlarm(`collapse_group_${groupId}`);
+                  if (alarm?.scheduledTime) {
+                    existingAlarmTime = alarm.scheduledTime;
+                  }
+                } catch {
+                  // Non-fatal
+                }
+              }
+
+              if (existingAlarmTime !== null) {
+                const remainingMs = existingAlarmTime - Date.now();
+                if (remainingMs <= 0) {
+                  // Alarm time already passed while worker was inactive - collapse immediately
+                  await this.handleTimerFired(groupId);
+                } else if (!existing?.timer) {
+                  // Re-arm in-memory timer for remaining duration without pushing target time forward
+                  this.setGroupTimer(groupId, window.id, remainingMs);
+                }
+              } else if (!existing?.timer) {
                 this.setGroupTimer(groupId, window.id);
               }
               this.setGroupActive(groupId, false, window.id);
@@ -507,9 +561,12 @@ export class GroupManager {
    * Resets all existing timers and refreshes.
    */
   public resetAllTimers(): void {
-    for (const [, state] of this.groupTimers) {
+    for (const [groupId, state] of this.groupTimers) {
       if (state.timer) {
         clearTimeout(state.timer);
+      }
+      if (this.browserAdapter.clearAlarm) {
+        this.browserAdapter.clearAlarm(`collapse_group_${groupId}`).catch(() => {});
       }
     }
     this.groupTimers.clear();

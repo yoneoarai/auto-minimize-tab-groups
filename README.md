@@ -24,7 +24,10 @@ A powerful cross-browser extension that automatically organizes your tabs into n
 - **Native Dark Mode**: Popup and settings interfaces seamlessly adapt to system/browser dark mode (`prefers-color-scheme: dark`).
 - **Manual Move Respect**: If you manually drag a tab to a different group, Tabbi respects your override until the tab navigates to a new URL.
 - **Catch-All Fallback Group**: Choose to leave unmatched tabs as-is or gather them into a customizable fallback group integrated directly into your rules list with full reordering and priority controls.
-- **Configurable Group Ordering**: Arrange tab groups in your tab strip manually (drag-and-drop order in settings) or alphabetically via an in-card toggle on the rules list. Newly created groups are instantly placed in their proper position.
+- **Configurable Group Ordering**: Choose between Off (groups stay where you place them), Rule Order (ordered by rules list), or Alphabetical (A-Z).
+- **Collapse Groups Only**: Turn off auto-grouping if you prefer organizing tabs yourself—Tabbi will only collapse inactive groups that you manage.
+- **Grouping Delay & SSO Protection**: Configurable grouping delay prevents tabs from jumping between groups during fast redirects, and sticky grouping protects grouped tabs during SSO/OAuth logins (e.g. Okta, Google Accounts, Microsoft Login).
+- **In-Group Tab Positioning**: Choose whether newly organized tabs are placed at the front or end of a group. Tabs manually rearranged inside a group are always preserved.
 - **Forward-Compatible & Persistent**: Settings, rules, and customizations persist seamlessly across extension updates without risk of data loss.
 - **Full Settings UI & Pattern Tester**: Interactive options page with live pattern testing, drag-and-drop rule reordering, and schema-validated JSON import/export.
 - **Quick-Access Popup**: Toggle Tabbi on/off, pause collapsing, inspect live group stats, and jump to full settings.
@@ -146,7 +149,7 @@ The project follows a clean decoupled Ports & Adapters architecture:
 
 ## Development & Testing
 
-Tabbi includes a comprehensive 146-test suite with over 85% line coverage and a cross-browser parity verification suite ensuring 100% markup, functional, and manifest parity between Chrome and Firefox:
+Tabbi includes a comprehensive 174-test suite with over 85% line coverage and a cross-browser parity verification suite ensuring 100% markup, functional, and manifest parity between Chrome and Firefox:
 
 ```bash
 # Run all unit and parity tests

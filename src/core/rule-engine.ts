@@ -223,4 +223,33 @@ export class RuleEngine {
 
     return null;
   }
+
+  /**
+   * Common authentication and Single Sign-On (SSO) URL patterns.
+   */
+  public static readonly DEFAULT_AUTH_PATTERNS: readonly RegExp[] = [
+    /okta\.com/i,
+    /auth0\.com/i,
+    /accounts\.google\.com/i,
+    /login\.microsoftonline\.com/i,
+    /identity\./i,
+    /signin\./i,
+    /login\./i,
+    /\/oauth/i,
+    /\/sso/i,
+    /\/saml/i,
+    /onelogin\.com/i,
+    /pingidentity\.com/i,
+    /duosecurity\.com/i,
+  ];
+
+  /**
+   * Checks whether a given URL is an authentication or Single Sign-On (SSO) redirect URL.
+   */
+  public static isAuthUrl(url: string): boolean {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+    return RuleEngine.DEFAULT_AUTH_PATTERNS.some((pattern) => pattern.test(url));
+  }
 }

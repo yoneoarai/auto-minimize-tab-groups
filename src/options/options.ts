@@ -2,7 +2,7 @@ import { BrowserAdapter } from '../adapters/browser-adapter';
 import { ConfigManager } from '../core/config-manager';
 import { RuleEngine } from '../core/rule-engine';
 import { GroupRule, TabGroupColor } from '../types/rules';
-import { TAB_GROUP_COLORS, DEFAULT_TIMEOUT_MS } from '../common/constants';
+import { TAB_GROUP_COLORS, DEFAULT_TIMEOUT_MS, DEFAULT_GROUPING_DELAY_MS } from '../common/constants';
 
 const browserAdapter = new BrowserAdapter();
 const configManager = new ConfigManager(browserAdapter);
@@ -500,6 +500,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // 3b. Auto-Group Master Toggle
+  const autoGroupToggle = document.getElementById('auto-group-toggle') as HTMLInputElement;
+  const rulesSection = document.getElementById('rules-section');
+
+  const updateRulesSectionState = (enabled: boolean) => {
+    if (rulesSection) {
+      rulesSection.style.opacity = enabled ? '1' : '0.6';
+    }
+    const offNote = document.getElementById('auto-group-off-note');
+    if (offNote) {
+      offNote.style.display = enabled ? 'none' : 'block';
+    }
+  };
+
+  if (autoGroupToggle) {
+    autoGroupToggle.checked = config.autoGroupTabs ?? true;
+    updateRulesSectionState(autoGroupToggle.checked);
+    autoGroupToggle.addEventListener('change', async () => {
+      await configManager.setAutoGroupEnabled(autoGroupToggle.checked);
+      updateRulesSectionState(autoGroupToggle.checked);
+      showToast(autoGroupToggle.checked ? 'Auto-grouping enabled' : 'Auto-grouping disabled (only collapsing groups)');
+    });
+  }
+
   // Fallback dialog priority toggle listener
   const evalLastCheckbox = document.getElementById('rule-eval-last-input') as HTMLInputElement;
   evalLastCheckbox?.addEventListener('change', () => {
@@ -508,32 +532,46 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 4. Group Ordering
   const orderingManual = document.getElementById('ordering-manual') as HTMLInputElement;
+  const orderingRules = document.getElementById('ordering-rules') as HTMLInputElement;
   const orderingAlpha = document.getElementById('ordering-alphabetical') as HTMLInputElement;
-  const orderingHint = document.getElementById('ordering-hint');
-
-  const updateOrderingHint = (isAlpha: boolean) => {
-    if (orderingHint) {
-      orderingHint.textContent = isAlpha
-        ? 'Alphabetical: tab groups in browser will be sorted A-Z'
-        : 'Manual: drag to arrange tab groups';
-    }
-  };
 
   if (orderingManual && orderingAlpha) {
-    if (config.groupOrdering === 'alphabetical') {
+    const currentMode = config.groupOrdering || 'manual';
+    if (currentMode === 'alphabetical') {
       orderingAlpha.checked = true;
-      updateOrderingHint(true);
+    } else if (currentMode === 'rules') {
+      if (orderingRules) orderingRules.checked = true;
     } else {
       orderingManual.checked = true;
-      updateOrderingHint(false);
     }
 
     document.querySelectorAll('input[name="group-ordering"]').forEach((r) => {
-      r.addEventListener('change', async () => {
-        const mode = orderingAlpha.checked ? 'alphabetical' : 'manual';
-        updateOrderingHint(orderingAlpha.checked);
+      r.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        const mode = target.value as 'manual' | 'rules' | 'alphabetical';
         await configManager.setGroupOrdering(mode);
-        showToast(`Group ordering set to ${mode}`);
+        showToast(`Group ordering set to ${mode === 'manual' ? 'Off' : mode === 'rules' ? 'Rule Order' : 'Alphabetical'}`);
+      });
+    });
+  }
+
+  // 4b. Tab Insert Position
+  const insertPosEnd = document.getElementById('insert-pos-end') as HTMLInputElement;
+  const insertPosFront = document.getElementById('insert-pos-front') as HTMLInputElement;
+  if (insertPosEnd && insertPosFront) {
+    const currentPos = config.tabInsertPosition || 'end';
+    if (currentPos === 'front') {
+      insertPosFront.checked = true;
+    } else {
+      insertPosEnd.checked = true;
+    }
+
+    document.querySelectorAll('input[name="tab-insert-position"]').forEach((r) => {
+      r.addEventListener('change', async (e) => {
+        const target = e.target as HTMLInputElement;
+        const pos = target.value as 'front' | 'end';
+        await configManager.setTabInsertPosition(pos);
+        showToast(`New tabs will be added to the ${pos === 'front' ? 'front' : 'end'} of groups`);
       });
     });
   }
@@ -545,6 +583,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     reorganizeCheckbox.addEventListener('change', async () => {
       await configManager.setReorganizeOnRuleChange(reorganizeCheckbox.checked);
       showToast('Setting saved');
+    });
+  }
+
+  // 5b. Grouping Delay
+  const groupingDelayInput = document.getElementById('grouping-delay-input') as HTMLInputElement;
+  if (groupingDelayInput) {
+    const currentDelayMs = config.groupingDelayMs ?? DEFAULT_GROUPING_DELAY_MS;
+    groupingDelayInput.value = String(currentDelayMs / 1000);
+    groupingDelayInput.addEventListener('change', async () => {
+      let seconds = parseFloat(groupingDelayInput.value);
+      if (isNaN(seconds) || seconds < 0) {
+        seconds = 0;
+      } else if (seconds > 10) {
+        seconds = 10;
+      }
+      groupingDelayInput.value = String(seconds);
+      const delayMs = Math.round(seconds * 1000);
+      await configManager.setGroupingDelayMs(delayMs);
+      showToast(delayMs === 0 ? 'Grouping delay set to instant' : `Grouping delay set to ${seconds}s`);
+    });
+  }
+
+  // 5c. SSO / Auth Redirect Protection
+  const ignoreAuthCheckbox = document.getElementById('ignore-auth-redirects') as HTMLInputElement;
+  if (ignoreAuthCheckbox) {
+    ignoreAuthCheckbox.checked = config.ignoreAuthRedirects ?? true;
+    ignoreAuthCheckbox.addEventListener('change', async () => {
+      await configManager.setIgnoreAuthRedirects(ignoreAuthCheckbox.checked);
+      showToast('SSO redirect protection updated');
     });
   }
 

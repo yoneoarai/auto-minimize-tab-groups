@@ -5,6 +5,10 @@ import {
   DEFAULT_TIMEOUT_MS,
   MIN_TIMEOUT_SECONDS,
   MAX_TIMEOUT_SECONDS,
+  DEFAULT_GROUPING_DELAY_MS,
+  MIN_GROUPING_DELAY_MS,
+  MAX_GROUPING_DELAY_MS,
+  DEFAULT_TAB_INSERT_POSITION,
   STORAGE_KEYS,
   CONFIG_VERSION,
   DEFAULT_GENERAL_GROUP_NAME,
@@ -167,6 +171,7 @@ export class ConfigManager {
     return {
       version: CONFIG_VERSION,
       enabled: true,
+      autoGroupTabs: true,
       defaultTimeoutMs: normalized,
       timeoutMs: normalized,
       rules: [],
@@ -177,6 +182,9 @@ export class ConfigManager {
         collapse: { enabled: true, timeoutMs: null },
       },
       groupOrdering: 'manual',
+      groupingDelayMs: DEFAULT_GROUPING_DELAY_MS,
+      ignoreAuthRedirects: true,
+      tabInsertPosition: DEFAULT_TAB_INSERT_POSITION,
       reorganizeOnRuleChange: true,
       collapsePaused: false,
     };
@@ -208,12 +216,16 @@ export class ConfigManager {
     const {
       version: rawVersion,
       enabled: rawEnabled,
+      autoGroupTabs: rawAutoGroupTabs,
       defaultTimeoutMs: _rawDefaultTimeoutMs,
       timeoutMs: _rawTimeoutMs,
       rules: rawRules,
       unmatchedTabBehavior: rawUnmatchedTabBehavior,
       generalGroup: rawGeneralGroup,
       groupOrdering: rawGroupOrdering,
+      groupingDelayMs: rawGroupingDelayMs,
+      ignoreAuthRedirects: rawIgnoreAuthRedirects,
+      tabInsertPosition: rawTabInsertPosition,
       reorganizeOnRuleChange: rawReorganizeOnRuleChange,
       collapsePaused: rawCollapsePaused,
       ...extraConfigProps
@@ -353,6 +365,34 @@ export class ConfigManager {
           evaluateLast: (rawGeneralGroup as any)?.evaluateLast,
         };
 
+    let groupOrdering: 'none' | 'manual' | 'alphabetical' | 'rules' = 'manual';
+    if (rawGroupOrdering === 'alphabetical') {
+      groupOrdering = 'alphabetical';
+    } else if (rawGroupOrdering === 'rules') {
+      groupOrdering = 'rules';
+    } else if (rawGroupOrdering === 'none') {
+      groupOrdering = 'none';
+    } else {
+      groupOrdering = 'manual';
+    }
+
+    const autoGroupTabs = typeof rawAutoGroupTabs === 'boolean' ? rawAutoGroupTabs : true;
+
+    let groupingDelayMs = DEFAULT_GROUPING_DELAY_MS;
+    if (
+      typeof rawGroupingDelayMs === 'number' &&
+      !isNaN(rawGroupingDelayMs) &&
+      rawGroupingDelayMs >= MIN_GROUPING_DELAY_MS
+    ) {
+      groupingDelayMs = Math.min(rawGroupingDelayMs, MAX_GROUPING_DELAY_MS);
+    }
+
+    const ignoreAuthRedirects =
+      typeof rawIgnoreAuthRedirects === 'boolean' ? rawIgnoreAuthRedirects : true;
+
+    const tabInsertPosition: 'front' | 'end' =
+      rawTabInsertPosition === 'front' ? 'front' : 'end';
+
     const version =
       typeof rawVersion === 'number' && rawVersion > CONFIG_VERSION
         ? rawVersion
@@ -362,13 +402,17 @@ export class ConfigManager {
       ...extraConfigProps,
       version,
       enabled: typeof rawEnabled === 'boolean' ? rawEnabled : true,
+      autoGroupTabs,
       defaultTimeoutMs,
       timeoutMs: defaultTimeoutMs,
       rules,
       unmatchedTabBehavior:
         rawUnmatchedTabBehavior === 'general-group' ? 'general-group' : 'leave-ungrouped',
       generalGroup: syncedGeneralGroup as any,
-      groupOrdering: rawGroupOrdering === 'alphabetical' ? 'alphabetical' : 'manual',
+      groupOrdering,
+      groupingDelayMs,
+      ignoreAuthRedirects,
+      tabInsertPosition,
       reorganizeOnRuleChange:
         typeof rawReorganizeOnRuleChange === 'boolean' ? rawReorganizeOnRuleChange : true,
       collapsePaused: Boolean(rawCollapsePaused),
@@ -753,10 +797,76 @@ export class ConfigManager {
   }
 
   /**
+   * Returns whether automatic tab grouping is enabled.
+   */
+  public isAutoGroupEnabled(): boolean {
+    return this.currentConfig.autoGroupTabs ?? true;
+  }
+
+  /**
+   * Sets whether automatic tab grouping is enabled.
+   */
+  public async setAutoGroupEnabled(enabled: boolean): Promise<void> {
+    this.currentConfig.autoGroupTabs = Boolean(enabled);
+    await this.saveConfig();
+  }
+
+  /**
+   * Returns the navigation grouping delay in milliseconds.
+   */
+  public getGroupingDelayMs(): number {
+    return this.currentConfig.groupingDelayMs ?? DEFAULT_GROUPING_DELAY_MS;
+  }
+
+  /**
+   * Sets the navigation grouping delay in milliseconds.
+   */
+  public async setGroupingDelayMs(delayMs: number): Promise<void> {
+    const normalized = Math.max(
+      MIN_GROUPING_DELAY_MS,
+      Math.min(MAX_GROUPING_DELAY_MS, isNaN(delayMs) ? DEFAULT_GROUPING_DELAY_MS : delayMs)
+    );
+    this.currentConfig.groupingDelayMs = normalized;
+    await this.saveConfig();
+  }
+
+  /**
+   * Returns whether auth/SSO redirects are ignored for already-grouped tabs.
+   */
+  public isIgnoreAuthRedirects(): boolean {
+    return this.currentConfig.ignoreAuthRedirects ?? true;
+  }
+
+  /**
+   * Sets whether auth/SSO redirects are ignored for already-grouped tabs.
+   */
+  public async setIgnoreAuthRedirects(enabled: boolean): Promise<void> {
+    this.currentConfig.ignoreAuthRedirects = Boolean(enabled);
+    await this.saveConfig();
+  }
+
+  /**
    * Sets group ordering mode.
    */
-  public async setGroupOrdering(ordering: 'manual' | 'alphabetical'): Promise<void> {
+  public async setGroupOrdering(
+    ordering: 'none' | 'manual' | 'alphabetical' | 'rules'
+  ): Promise<void> {
     this.currentConfig.groupOrdering = ordering;
+    await this.saveConfig();
+  }
+
+  /**
+   * Returns tab insertion position within groups ('front' | 'end').
+   */
+  public getTabInsertPosition(): 'front' | 'end' {
+    return this.currentConfig.tabInsertPosition ?? DEFAULT_TAB_INSERT_POSITION;
+  }
+
+  /**
+   * Sets tab insertion position within groups ('front' | 'end').
+   */
+  public async setTabInsertPosition(position: 'front' | 'end'): Promise<void> {
+    this.currentConfig.tabInsertPosition = position === 'front' ? 'front' : 'end';
     await this.saveConfig();
   }
 

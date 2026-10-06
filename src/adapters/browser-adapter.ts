@@ -8,6 +8,7 @@ import {
   TabRemoveInfo,
   StorageChange,
   InstalledDetails,
+  BrowserAlarm,
 } from '../types/browser';
 
 function resolveApi(): any {
@@ -119,6 +120,26 @@ export class BrowserAdapter implements IBrowserAdapter {
           reject(new Error(this.api.runtime.lastError.message));
         } else {
           resolve();
+        }
+      });
+    });
+  }
+
+  public async moveTab(
+    tabId: number,
+    moveProperties: { index: number; windowId?: number }
+  ): Promise<BrowserTab> {
+    const tabsApi = this.ensureApi('tabs');
+    const res = tabsApi.move(tabId, moveProperties);
+    if (res && typeof res.then === 'function') {
+      return await res;
+    }
+    return new Promise((resolve, reject) => {
+      tabsApi.move(tabId, moveProperties, (tab: BrowserTab) => {
+        if (this.api.runtime?.lastError) {
+          reject(new Error(this.api.runtime.lastError.message));
+        } else {
+          resolve(tab);
         }
       });
     });
@@ -236,6 +257,49 @@ export class BrowserAdapter implements IBrowserAdapter {
         }
       });
     });
+  }
+
+  // ==========================================================================
+  // Alarms API (MV3 Service Worker Background Timers)
+  // ==========================================================================
+
+  public async createAlarm(
+    name: string,
+    alarmInfo: { when?: number; delayInMinutes?: number; periodInMinutes?: number }
+  ): Promise<void> {
+    const alarmsApi = this.ensureApi('alarms');
+    alarmsApi.create(name, alarmInfo);
+  }
+
+  public async clearAlarm(name: string): Promise<boolean> {
+    const alarmsApi = this.ensureApi('alarms');
+    const res = alarmsApi.clear(name);
+    if (res && typeof res.then === 'function') {
+      return await res;
+    }
+    return new Promise((resolve) => {
+      alarmsApi.clear(name, (wasCleared: boolean) => {
+        resolve(Boolean(wasCleared));
+      });
+    });
+  }
+
+  public async getAlarm(name: string): Promise<BrowserAlarm | null> {
+    const alarmsApi = this.ensureApi('alarms');
+    const res = alarmsApi.get(name);
+    if (res && typeof res.then === 'function') {
+      return await res;
+    }
+    return new Promise((resolve) => {
+      alarmsApi.get(name, (alarm: BrowserAlarm | null) => {
+        resolve(alarm || null);
+      });
+    });
+  }
+
+  public onAlarm(callback: (alarm: BrowserAlarm) => void): void {
+    const alarmsApi = this.ensureApi('alarms');
+    alarmsApi.onAlarm.addListener(callback);
   }
 
   // ==========================================================================
