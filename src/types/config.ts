@@ -17,7 +17,11 @@ export interface ExtensionConfigV2 {
       timeoutMs: number | null;
     };
   };
-  groupOrdering: 'manual' | 'alphabetical';
+  groupOrdering: 'none' | 'manual' | 'alphabetical' | 'rules';
+  autoGroupTabs: boolean;
+  groupingDelayMs: number;
+  ignoreAuthRedirects: boolean;
+  tabInsertPosition: 'front' | 'end';
   reorganizeOnRuleChange: boolean;
   collapsePaused: boolean;
 }
@@ -32,6 +36,18 @@ export interface ExtensionConfig {
 
   /** Global enable/disable toggle */
   enabled?: boolean;
+
+  /** Whether to automatically organize tabs into groups based on rules */
+  autoGroupTabs?: boolean;
+
+  /** Delay in milliseconds to wait for navigation/redirects to settle before grouping (0 for instant) */
+  groupingDelayMs?: number;
+
+  /** Whether to keep already grouped tabs in their group during SSO / auth redirects */
+  ignoreAuthRedirects?: boolean;
+
+  /** Where newly added tabs are placed inside the group ('front' or 'end') */
+  tabInsertPosition?: 'front' | 'end';
 
   /** Default collapse timeout (ms) for groups without a custom setting */
   defaultTimeoutMs?: number;
@@ -60,7 +76,7 @@ export interface ExtensionConfig {
   };
 
   /** How groups are ordered in the tab strip */
-  groupOrdering?: 'manual' | 'alphabetical';
+  groupOrdering?: 'none' | 'manual' | 'alphabetical' | 'rules';
 
   /** Whether to re-organize existing tabs when rules change */
   reorganizeOnRuleChange?: boolean;

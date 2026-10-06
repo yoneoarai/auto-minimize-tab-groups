@@ -2,6 +2,7 @@ import { IBrowserAdapter, BrowserTab, TabChangeInfo } from '../types/browser';
 import { ConfigManager } from './config-manager';
 import { RuleEngine } from './rule-engine';
 import { TabGroupColor } from '../types/rules';
+import { DEFAULT_GROUPING_DELAY_MS } from '../common/constants';
 
 /**
  * Service that organizes tabs into named, colored groups based on configured URL rules.
@@ -12,6 +13,7 @@ export class TabOrganizer {
   private pendingGroupAssignments: Set<number> = new Set();
   private tabUrls: Map<number, string> = new Map();
   private windowOrderPromises: Map<number, Promise<void>> = new Map();
+  private pendingDebounceTimers: Map<number, any> = new Map();
 
   constructor(
     private browserAdapter: IBrowserAdapter,
@@ -44,6 +46,7 @@ export class TabOrganizer {
 
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
+    if (config.autoGroupTabs === false) return;
 
     // Respect manual overrides: if the user moved this tab, do not re-assign until URL navigates
     if (this.manualOverrides.has(tab.id)) {
@@ -52,7 +55,8 @@ export class TabOrganizer {
 
     let url = tab.url || tab.pendingUrl;
     let pinned: boolean | undefined = tab.pinned;
-    if (!url || pinned === undefined) {
+    let groupId: number | undefined = tab.groupId;
+    if (!url || pinned === undefined || groupId === undefined) {
       try {
         const fullTab = await this.browserAdapter.getTab(tab.id);
         if (!url) {
@@ -60,6 +64,9 @@ export class TabOrganizer {
         }
         if (pinned === undefined) {
           pinned = fullTab.pinned;
+        }
+        if (groupId === undefined) {
+          groupId = fullTab.groupId;
         }
       } catch {
         return;
@@ -71,6 +78,19 @@ export class TabOrganizer {
 
     // Skip internal browser schemes (e.g. chrome://, about:, extensions)
     if (/^(chrome|edge|about|chrome-extension|moz-extension):\/\//i.test(url)) {
+      return;
+    }
+
+    // Sticky Grouping / Ignore Auth Redirects:
+    // If the tab is already inside a group, and navigates to an authentication/SSO endpoint,
+    // keep it in its current group so it doesn't hop across groups or lose its place.
+    if (
+      config.ignoreAuthRedirects !== false &&
+      groupId !== undefined &&
+      groupId !== -1 &&
+      this.ruleEngine.isAuthUrl(url)
+    ) {
+      this.tabUrls.set(tab.id, url);
       return;
     }
 
@@ -113,10 +133,26 @@ export class TabOrganizer {
       if (tab.groupId !== targetGroup.id) {
         this.pendingGroupAssignments.add(tab.id!);
         try {
+          const config = this.configManager.getConfig();
+          const insertPosition = config.tabInsertPosition || 'end';
+          let frontIndex: number | undefined;
+
+          if (insertPosition === 'front') {
+            const allTabs = await this.browserAdapter.queryTabs(windowId ? { windowId } : {});
+            const groupTabs = allTabs.filter((t) => t.groupId === targetGroup.id && t.id !== tab.id);
+            if (groupTabs.length > 0) {
+              frontIndex = Math.min(...groupTabs.map((t) => (typeof t.index === 'number' ? t.index : 0)));
+            }
+          }
+
           await this.browserAdapter.groupTabs({
             tabIds: [tab.id!],
             groupId: targetGroup.id,
           });
+
+          if (frontIndex !== undefined && this.browserAdapter.moveTab) {
+            await this.browserAdapter.moveTab(tab.id!, { index: frontIndex });
+          }
         } finally {
           setTimeout(() => this.pendingGroupAssignments.delete(tab.id!), 1000);
         }
@@ -136,16 +172,19 @@ export class TabOrganizer {
           color,
         });
 
-        // Immediately position the new group according to configured tab strip order
-        let winId = windowId;
-        if (!winId && tab.id) {
-          try {
-            const freshTab = await this.browserAdapter.getTab(tab.id);
-            winId = freshTab.windowId;
-          } catch {}
-        }
-        if (winId) {
-          await this.orderGroups(winId);
+        // Position the new group according to configured tab strip order if ordering is enabled
+        const config = this.configManager.getConfig();
+        if (config.groupOrdering === 'alphabetical' || config.groupOrdering === 'rules') {
+          let winId = windowId;
+          if (!winId && tab.id) {
+            try {
+              const freshTab = await this.browserAdapter.getTab(tab.id);
+              winId = freshTab.windowId;
+            } catch {}
+          }
+          if (winId) {
+            await this.orderGroups(winId);
+          }
         }
 
         return newGroupId;
@@ -161,6 +200,7 @@ export class TabOrganizer {
   public async organizeAllTabs(windowId?: number): Promise<void> {
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
+    if (config.autoGroupTabs === false) return;
 
     // Reset manual overrides so tabs are not permanently locked when re-organizing
     this.manualOverrides.clear();
@@ -175,10 +215,13 @@ export class TabOrganizer {
         const tabs = await this.browserAdapter.queryTabs({ windowId: win.id });
         for (const tab of tabs) {
           if (!tab.pinned) {
+            if (tab.id) this.cancelPendingDebounce(tab.id);
             await this.organizeTab(tab);
           }
         }
-        await this.orderGroups(win.id);
+        if (config.groupOrdering === 'alphabetical' || config.groupOrdering === 'rules') {
+          await this.orderGroups(win.id);
+        }
       }
     } catch (error) {
       console.warn('Error organizing tabs:', error);
@@ -191,6 +234,7 @@ export class TabOrganizer {
   public async orderAllGroups(): Promise<void> {
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
+    if (config.groupOrdering === 'none' || config.groupOrdering === 'manual') return;
 
     try {
       const windows = await this.browserAdapter.getAllWindows({ populate: false });
@@ -209,6 +253,10 @@ export class TabOrganizer {
    * Serializes per-window calls to avoid concurrent ordering races.
    */
   public async orderGroups(windowId: number): Promise<void> {
+    const config = this.configManager.getConfig();
+    if (!config.enabled) return;
+    if (config.groupOrdering === 'none' || config.groupOrdering === 'manual') return;
+
     const currentPromise = this.windowOrderPromises.get(windowId) || Promise.resolve();
     const nextPromise = currentPromise
       .then(() => this.doOrderGroups(windowId))
@@ -227,6 +275,7 @@ export class TabOrganizer {
 
     const config = this.configManager.getConfig();
     if (!config.enabled) return;
+    if (config.groupOrdering === 'none' || config.groupOrdering === 'manual') return;
 
     try {
       const [groups, tabs] = await Promise.all([
@@ -258,7 +307,7 @@ export class TabOrganizer {
       const targetSortedGroups = [...activeGroups];
       if (config.groupOrdering === 'alphabetical') {
         targetSortedGroups.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-      } else if (config.groupOrdering === 'manual') {
+      } else if (config.groupOrdering === 'rules') {
         const rules = config.rules || [];
         const ruleOrderMap = new Map<string, number>();
         rules.forEach((r, idx) => {
@@ -298,6 +347,76 @@ export class TabOrganizer {
   }
 
   // ==========================================================================
+  // DEBOUNCED SCHEDULING HELPERS
+  // ==========================================================================
+
+  /**
+   * Schedules a debounced organizeTab call for a tab.
+   * If called again for the same tab before timeout expires, the previous timer is cancelled.
+   */
+  public scheduleOrganizeTab(tabId: number, delayMs: number): void {
+    this.cancelPendingDebounce(tabId);
+
+    const timer = setTimeout(async () => {
+      this.pendingDebounceTimers.delete(tabId);
+      try {
+        const freshTab = await this.browserAdapter.getTab(tabId);
+        if (freshTab && !freshTab.pinned) {
+          await this.organizeTab(freshTab);
+        }
+      } catch {
+        // Tab may have been closed
+      }
+    }, delayMs);
+
+    this.pendingDebounceTimers.set(tabId, timer);
+  }
+
+  /**
+   * Cancels any pending debounce timer for a tab.
+   */
+  public cancelPendingDebounce(tabId: number): void {
+    const timer = this.pendingDebounceTimers.get(tabId);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingDebounceTimers.delete(tabId);
+    }
+  }
+
+  /**
+   * Returns whether a tab has a pending grouping debounce timer.
+   */
+  public hasPendingDebounce(tabId: number): boolean {
+    return this.pendingDebounceTimers.has(tabId);
+  }
+
+  /**
+   * Flushes all pending debounce timers immediately (useful for tests and clean transitions).
+   */
+  public async flushPendingDebounces(): Promise<void> {
+    const tabIds = Array.from(this.pendingDebounceTimers.keys());
+    for (const tabId of tabIds) {
+      this.cancelPendingDebounce(tabId);
+      try {
+        const tab = await this.browserAdapter.getTab(tabId);
+        if (tab && !tab.pinned) {
+          await this.organizeTab(tab);
+        }
+      } catch {}
+    }
+  }
+
+  /**
+   * Clears all pending debounce timers without executing them.
+   */
+  public clearPendingTimers(): void {
+    for (const timer of this.pendingDebounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingDebounceTimers.clear();
+  }
+
+  // ==========================================================================
   // BROWSER EVENT HANDLERS
   // ==========================================================================
 
@@ -312,7 +431,18 @@ export class TabOrganizer {
     if (tab.pinned) {
       return;
     }
-    await this.organizeTab(tab);
+
+    const config = this.configManager.getConfig();
+    if (!config.enabled || config.autoGroupTabs === false) {
+      return;
+    }
+
+    const delayMs = config.groupingDelayMs ?? DEFAULT_GROUPING_DELAY_MS;
+    if (delayMs > 0 && tab.id) {
+      this.scheduleOrganizeTab(tab.id, delayMs);
+    } else {
+      await this.organizeTab(tab);
+    }
   };
 
   public handleTabUpdated = async (
@@ -323,13 +453,23 @@ export class TabOrganizer {
     // If tab is pinned or was just pinned, never group it
     if (tab.pinned || changeInfo.pinned === true) {
       this.manualOverrides.delete(tabId);
+      this.cancelPendingDebounce(tabId);
       return;
     }
 
     // If tab was unpinned, evaluate for grouping
     if (changeInfo.pinned === false) {
       this.manualOverrides.delete(tabId);
-      await this.organizeTab({ ...tab, pinned: false });
+      const config = this.configManager.getConfig();
+      if (!config.enabled || config.autoGroupTabs === false) {
+        return;
+      }
+      const delayMs = config.groupingDelayMs ?? DEFAULT_GROUPING_DELAY_MS;
+      if (delayMs > 0) {
+        this.scheduleOrganizeTab(tabId, delayMs);
+      } else {
+        await this.organizeTab({ ...tab, pinned: false });
+      }
       return;
     }
 
@@ -345,7 +485,18 @@ export class TabOrganizer {
       const newUrl = changeInfo.url || currentUrl!;
       this.tabUrls.set(tabId, newUrl);
       this.manualOverrides.delete(tabId);
-      await this.organizeTab({ ...tab, url: newUrl });
+
+      const config = this.configManager.getConfig();
+      if (!config.enabled || config.autoGroupTabs === false) {
+        return;
+      }
+
+      const delayMs = config.groupingDelayMs ?? DEFAULT_GROUPING_DELAY_MS;
+      if (delayMs > 0) {
+        this.scheduleOrganizeTab(tabId, delayMs);
+      } else {
+        await this.organizeTab({ ...tab, url: newUrl });
+      }
       return;
     }
 
@@ -363,6 +514,7 @@ export class TabOrganizer {
   };
 
   public handleTabRemoved = (tabId: number): void => {
+    this.cancelPendingDebounce(tabId);
     this.manualOverrides.delete(tabId);
     this.tabUrls.delete(tabId);
     this.pendingGroupAssignments.delete(tabId);

@@ -27,6 +27,11 @@ export interface BrowserWindow {
   focused?: boolean;
 }
 
+export interface BrowserAlarm {
+  name: string;
+  scheduledTime: number;
+}
+
 export interface TabActiveInfo {
   tabId: number;
   windowId: number;
@@ -60,6 +65,7 @@ export interface IBrowserAdapter {
   // Tabs
   getTab(tabId: number): Promise<BrowserTab>;
   queryTabs(queryInfo: { windowId?: number; groupId?: number; active?: boolean; lastFocusedWindow?: boolean }): Promise<BrowserTab[]>;
+  moveTab?(tabId: number, moveProperties: { index: number; windowId?: number }): Promise<BrowserTab>;
 
   // Tab Groups
   getTabGroup(groupId: number): Promise<BrowserTabGroup>;
@@ -77,6 +83,12 @@ export interface IBrowserAdapter {
   // Permissions
   requestPermission?(permissions: string[]): Promise<boolean>;
   hasPermission?(permissions: string[]): Promise<boolean>;
+
+  // Alarms (MV3 Service Worker Background Timers)
+  createAlarm?(name: string, alarmInfo: { when?: number; delayInMinutes?: number; periodInMinutes?: number }): Promise<void>;
+  clearAlarm?(name: string): Promise<boolean>;
+  getAlarm?(name: string): Promise<BrowserAlarm | null>;
+  onAlarm?(callback: (alarm: BrowserAlarm) => void): void;
 
   // Windows
   getAllWindows(getInfo?: { populate?: boolean }): Promise<BrowserWindow[]>;

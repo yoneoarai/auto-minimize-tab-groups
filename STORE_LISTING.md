@@ -13,7 +13,11 @@ Automatically group tabs by URL rules and collapse inactive tab groups to keep y
 ## Full Store Description (Chrome Web Store & Firefox Add-ons)
 
 ```text
-New in v1.1.0: Built-in automatic tab grouping! You no longer need a separate extension to create tab groups. Tabbi now groups your tabs using custom URL rules and minimizes inactive groups automatically.
+New in v1.2.0:
+• Reliable collapse timers across long inactivity periods using native browser alarms.
+• In-group tab positioning: choose front or end of group for newly added tabs.
+• Collapse-only mode: disable automatic grouping if you prefer manually organized groups.
+• Sign-in redirect protection: keeps tabs in their group during SSO logins (Okta, Google, Microsoft).
 
 Tabbi keeps your browser organized and clutter-free. It sorts your tabs into named, color-coded groups based on your URL rules, and automatically collapses inactive groups so your tab strip stays clean and readable.
 
@@ -23,7 +27,13 @@ Automatic Tab Grouping
 Create custom rules to automatically sort tabs into named, colored groups based on domain, subdomain, wildcard (*), or URL path. New tabs are grouped instantly as you browse.
 
 Smart Auto-Minimizing
-Inactive tab groups automatically collapse after a set timeout (default: 30 seconds). Groups containing your active tab always stay open so your current work is never interrupted.
+Inactive tab groups automatically collapse after a set timeout (from seconds to hours). Inactive groups collapse reliably via native background alarms, and groups containing your active tab always stay open so your current work is never interrupted.
+
+In-Group Tab Positioning
+Control where newly grouped tabs land inside their group—at the front or the end. Manually rearranged tabs inside a group are always preserved.
+
+Collapse-Only Mode
+Prefer organizing tabs yourself? Turn off automatic URL grouping, and Tabbi will focus solely on auto-collapsing inactive groups you create.
 
 Per-Group Customization
 Set individual collapse timeouts for each group, or disable auto-collapsing entirely for groups you want to keep open permanently (such as Work, Docs, or Dashboard).

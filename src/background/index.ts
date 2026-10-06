@@ -67,7 +67,7 @@ async function initialize(): Promise<void> {
   try {
     const config = await configManager.loadConfig();
     await updateActionBadge(config);
-    if (config.enabled) {
+    if (config.enabled && config.autoGroupTabs !== false) {
       await tabOrganizer.organizeAllTabs();
     }
     await groupManager.refreshGroupTimers();
@@ -80,14 +80,16 @@ async function initialize(): Promise<void> {
 configManager.onConfigChanged((config) => {
   updateActionBadge(config).catch(() => {});
   if (config.enabled) {
-    if (config.reorganizeOnRuleChange) {
-      tabOrganizer.organizeAllTabs().catch((err) => {
-        console.warn('Error organizing tabs on config change:', err);
-      });
-    } else {
-      tabOrganizer.orderAllGroups().catch((err) => {
-        console.warn('Error ordering groups on config change:', err);
-      });
+    if (config.autoGroupTabs !== false) {
+      if (config.reorganizeOnRuleChange) {
+        tabOrganizer.organizeAllTabs().catch((err) => {
+          console.warn('Error organizing tabs on config change:', err);
+        });
+      } else if (config.groupOrdering === 'alphabetical' || config.groupOrdering === 'rules') {
+        tabOrganizer.orderAllGroups().catch((err) => {
+          console.warn('Error ordering groups on config change:', err);
+        });
+      }
     }
     groupManager.refreshGroupTimers().catch((err) => {
       console.warn('Error refreshing timers on config change:', err);
@@ -100,6 +102,16 @@ browserAdapter.onCommand?.(async (command) => {
   if (command === 'toggle-pause') {
     const isPaused = configManager.isCollapsePaused();
     await configManager.setCollapsePaused(!isPaused);
+  }
+});
+
+// Handle browser alarms (MV3 persistent collapse timers)
+browserAdapter.onAlarm?.(async (alarm) => {
+  if (alarm.name.startsWith('collapse_group_')) {
+    const groupId = parseInt(alarm.name.replace('collapse_group_', ''), 10);
+    if (!isNaN(groupId)) {
+      await groupManager.handleAlarmFired(groupId);
+    }
   }
 });
 

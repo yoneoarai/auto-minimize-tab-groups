@@ -544,6 +544,67 @@ describe('ConfigManager', () => {
     it('updates group ordering mode', async () => {
       await configManager.setGroupOrdering('alphabetical');
       expect(configManager.getConfig().groupOrdering).toBe('alphabetical');
+
+      await configManager.setGroupOrdering('rules');
+      expect(configManager.getConfig().groupOrdering).toBe('rules');
+
+      await configManager.setGroupOrdering('none');
+      expect(configManager.getConfig().groupOrdering).toBe('none');
+
+      await configManager.setGroupOrdering('manual');
+      expect(configManager.getConfig().groupOrdering).toBe('manual');
+    });
+
+    it('manages autoGroupTabs setting', async () => {
+      expect(configManager.isAutoGroupEnabled()).toBe(true);
+
+      await configManager.setAutoGroupEnabled(false);
+      expect(configManager.isAutoGroupEnabled()).toBe(false);
+      expect(configManager.getConfig().autoGroupTabs).toBe(false);
+
+      await configManager.setAutoGroupEnabled(true);
+      expect(configManager.isAutoGroupEnabled()).toBe(true);
+      expect(configManager.getConfig().autoGroupTabs).toBe(true);
+    });
+
+    it('manages groupingDelayMs setting and clamps out-of-bounds values', async () => {
+      expect(configManager.getGroupingDelayMs()).toBe(1000);
+
+      await configManager.setGroupingDelayMs(2000);
+      expect(configManager.getGroupingDelayMs()).toBe(2000);
+      expect(configManager.getConfig().groupingDelayMs).toBe(2000);
+
+      // Clamp upper bound (MAX_GROUPING_DELAY_MS = 10000)
+      await configManager.setGroupingDelayMs(20000);
+      expect(configManager.getGroupingDelayMs()).toBe(10000);
+
+      // Clamp lower bound (MIN_GROUPING_DELAY_MS = 0)
+      await configManager.setGroupingDelayMs(-500);
+      expect(configManager.getGroupingDelayMs()).toBe(0);
+    });
+
+    it('manages ignoreAuthRedirects setting', async () => {
+      expect(configManager.isIgnoreAuthRedirects()).toBe(true);
+
+      await configManager.setIgnoreAuthRedirects(false);
+      expect(configManager.isIgnoreAuthRedirects()).toBe(false);
+      expect(configManager.getConfig().ignoreAuthRedirects).toBe(false);
+
+      await configManager.setIgnoreAuthRedirects(true);
+      expect(configManager.isIgnoreAuthRedirects()).toBe(true);
+      expect(configManager.getConfig().ignoreAuthRedirects).toBe(true);
+    });
+
+    it('manages tabInsertPosition setting', async () => {
+      expect(configManager.getTabInsertPosition()).toBe('end');
+
+      await configManager.setTabInsertPosition('front');
+      expect(configManager.getTabInsertPosition()).toBe('front');
+      expect(configManager.getConfig().tabInsertPosition).toBe('front');
+
+      await configManager.setTabInsertPosition('end');
+      expect(configManager.getTabInsertPosition()).toBe('end');
+      expect(configManager.getConfig().tabInsertPosition).toBe('end');
     });
 
     it('updates reorganize on rule change', async () => {

@@ -77,6 +77,38 @@
         border-color: #3c4043 !important;
         color: #9aa0a6 !important;
       }
+
+      .rule-item {
+        background-color: #292a2d !important;
+      }
+
+      .rule-item:hover {
+        background-color: #35363a !important;
+      }
+
+      .tester-container,
+      #tester-row {
+        background-color: #292a2d !important;
+        border-color: #3c4043 !important;
+      }
+
+      dialog {
+        border-color: #3c4043 !important;
+      }
+
+      .color-choice.selected {
+        border-color: #e8eaed !important;
+      }
+
+      .fallback-badge {
+        background-color: #3c4043 !important;
+        color: #bdc1c6 !important;
+        border-color: #5f6368 !important;
+      }
+
+      .btn-primary {
+        color: #202124 !important;
+      }
     }
 
     * {
@@ -228,6 +260,48 @@
     input[type="number"]:focus,
     select:focus {
       border-color: var(--primary-color);
+    }
+
+    input[type="number"].input-compact {
+      width: 88px;
+      flex-shrink: 0;
+    }
+
+    .off-note {
+      font-size: 12px;
+      color: #b06000;
+      background: #fef7e0;
+      border: 1px solid #f9ab00;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .off-note {
+        color: #fdd663;
+        background: #3c3520;
+        border-color: #f9ab00;
+      }
+    }
+
+    .setting-help {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .setting-label {
+      font-weight: 500;
+      font-size: 13px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .setting-unit {
+      font-size: 13px;
+      color: var(--text-secondary);
+      white-space: nowrap;
     }
 
     .radio-group {
@@ -751,6 +825,34 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* Focus-visible for accessibility */
+    .btn:focus-visible,
+    .switch input:focus-visible + .slider {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+
+    input[type="checkbox"]:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+
+    /* Card sub-section heading */
+    .card-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .card-divider {
+      border: none;
+      border-top: 1px solid var(--border-color);
+      margin: 20px 0 16px 0;
+    }
   </style>
 </head>
 <body>
@@ -782,71 +884,122 @@
       </div>
     </div>
 
-    <!-- Default Timeout Card -->
-    <div class="card">
-      <div class="card-title">Default Collapse Timeout</div>
-      <div class="card-subtitle">Inactivity timeout before collapsing groups without a custom rule setting.</div>
-      <div style="display: flex; align-items: center; gap: 12px; max-width: 260px;">
-        <input type="number" id="default-timeout-input" min="1" max="3600" value="30">
-        <span>seconds</span>
-      </div>
-    </div>
-
     <!-- Group Rules Card -->
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-        <div>
+        <div style="flex: 1;">
           <div class="card-title">Group Rules</div>
           <div class="card-subtitle" style="margin-bottom: 0;">Tabs matching these patterns will be automatically organized into groups. Evaluated by Priority (1 = Highest, first match wins).</div>
         </div>
-        <button id="add-rule-btn" class="btn btn-primary btn-sm">+ Add Rule</button>
+        <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0; margin-left: 16px;">
+          <div style="display: flex; align-items: center; gap: 6px;" title="Automatically organize tabs into groups using rules. When disabled, Tabbi will only collapse inactive groups that you manage.">
+            <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap;">Auto-Group</span>
+            <label class="switch" style="flex-shrink: 0;">
+              <input type="checkbox" id="auto-group-toggle" aria-label="Auto-Group tabs" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <button id="add-rule-btn" class="btn btn-primary btn-sm">+ Add Rule</button>
+        </div>
       </div>
 
-      <div class="rules-card-toolbar">
-        <div class="ordering-toggle-wrapper">
-          <span class="ordering-label">Tab Strip Order:</span>
-          <div class="segmented-control" role="radiogroup" aria-label="Tab Strip Ordering Mode">
-            <input type="radio" name="group-ordering" value="manual" id="ordering-manual" checked>
-            <label for="ordering-manual" title="Arrange tab groups manually via drag & drop">Manual</label>
-            <input type="radio" name="group-ordering" value="alphabetical" id="ordering-alphabetical">
-            <label for="ordering-alphabetical" title="Sort tab groups alphabetically A-Z by name">Alphabetical</label>
-          </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 5px;">
-            <span class="ordering-label">Catch-All Group:</span>
-            <div class="info-tooltip-wrapper">
-              <span class="info-icon" tabindex="0" role="button" aria-label="Catch-all group info" title="Catch-all group info">i</span>
-              <div class="tooltip-content" role="tooltip">
-                <strong>Catch-All Group</strong>
-                <p>When enabled, tabs that don't match any of your specific rules above are automatically organized into this fallback group (default: "General").</p>
-                <p>It appears as an entry in the rules list so you can reorder its position in your tab strip, edit its color and name, or configure its priority.</p>
+      <div id="auto-group-off-note" class="off-note" style="display: none; margin-bottom: 12px;" role="status">
+        Auto-Group is off. Your rules are saved but not applied, and Tabbi only collapses groups you manage.
+      </div>
+
+      <div id="rules-section">
+        <div class="rules-card-toolbar">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <span class="ordering-label">Catch-All Group:</span>
+              <div class="info-tooltip-wrapper">
+                <span class="info-icon" tabindex="0" role="button" aria-label="Catch-all group info" title="Catch-all group info">i</span>
+                <div class="tooltip-content" role="tooltip">
+                  <strong>Catch-All Group</strong>
+                  <p>When enabled, tabs that don't match any of your specific rules above are automatically organized into this fallback group (default: "General").</p>
+                  <p>It appears as an entry in the rules list so you can reorder its position in your tab strip, edit its color and name, or configure its priority.</p>
+                </div>
               </div>
             </div>
+            <label class="switch" style="transform: scale(0.85); transform-origin: center;">
+              <input type="checkbox" id="catch-all-toggle">
+              <span class="slider"></span>
+            </label>
           </div>
-          <label class="switch" style="transform: scale(0.85); transform-origin: center;">
-            <input type="checkbox" id="catch-all-toggle">
-            <span class="slider"></span>
-          </label>
         </div>
-      </div>
 
-      <div id="rules-container" class="rules-list">
-        <!-- Rendered dynamically -->
+        <div id="rules-container" class="rules-list">
+          <!-- Rendered dynamically -->
+        </div>
       </div>
     </div>
 
     <!-- Advanced Settings Card -->
     <div class="card">
       <div class="card-title">Advanced</div>
+
+      <div class="card-section-title">Behavior</div>
+
+      <div class="form-group">
+        <label for="default-timeout-input" class="setting-label">Default Collapse Timeout</label>
+        <div class="setting-help">How long a group can sit unused before it collapses. Individual rules can override this.</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="number" class="input-compact" id="default-timeout-input" min="1" max="3600" value="30">
+          <span class="setting-unit">seconds</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <span class="setting-label" id="group-ordering-label">Group Ordering</span>
+        <div class="setting-help">Keep your groups sorted in the tab bar. "Off" never moves your groups.</div>
+        <div class="segmented-control" role="radiogroup" aria-labelledby="group-ordering-label">
+          <input type="radio" name="group-ordering" value="manual" id="ordering-manual" checked>
+          <label for="ordering-manual" title="Do not reorder tab groups">Off</label>
+          <input type="radio" name="group-ordering" value="rules" id="ordering-rules">
+          <label for="ordering-rules" title="Order tab groups by rule list position">Rule Order</label>
+          <input type="radio" name="group-ordering" value="alphabetical" id="ordering-alphabetical">
+          <label for="ordering-alphabetical" title="Sort tab groups alphabetically A-Z by name">Alphabetical</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <span class="setting-label" id="insert-position-label">New tabs in group</span>
+        <div class="setting-help">Where a tab lands when it joins a group. Tabs you rearrange yourself stay put.</div>
+        <div class="segmented-control" role="radiogroup" aria-labelledby="insert-position-label">
+          <input type="radio" name="tab-insert-position" value="end" id="insert-pos-end" checked>
+          <label for="insert-pos-end" title="Add new tabs to the end of the group">End</label>
+          <input type="radio" name="tab-insert-position" value="front" id="insert-pos-front">
+          <label for="insert-pos-front" title="Add new tabs to the front of the group">Front</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="grouping-delay-input" class="setting-label">Grouping Delay</label>
+        <div class="setting-help">Wait this long after a page loads before grouping it, so quick redirects don't bounce the tab between groups.</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="number" class="input-compact" id="grouping-delay-input" min="0" max="10" step="0.5" value="1">
+          <span class="setting-unit">seconds (0 for instant)</span>
+        </div>
+      </div>
+
       <div class="form-group">
         <label class="radio-label">
           <input type="checkbox" id="reorganize-on-change" checked>
-          <span>Automatically re-organize open tabs when rules change</span>
+          <span>Re-organize open tabs when rules change</span>
         </label>
       </div>
 
-      <div style="display: flex; gap: 10px; margin-top: 16px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="radio-label" style="align-items: flex-start;">
+          <input type="checkbox" id="ignore-auth-redirects" checked style="margin-top: 3px;">
+          <span>Keep tabs in their group during sign-in redirects<br><span class="setting-help" style="margin: 0;">Covers Okta, Google Accounts, Microsoft Login, and similar.</span></span>
+        </label>
+      </div>
+
+      <hr class="card-divider">
+      <div class="card-section-title">Data</div>
+
+      <div style="display: flex; gap: 10px;">
         <button id="export-btn" class="btn btn-secondary btn-sm">Export Settings</button>
         <label class="btn btn-secondary btn-sm" style="margin-bottom: 0;">
           Import Settings
@@ -857,7 +1010,7 @@
     </div>
 
     <footer style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border-color); text-align: center; font-size: 12px; color: var(--text-secondary);">
-      Tabbi — Tab Group Manager v1.1.0
+      Tabbi — Tab Group Manager v1.2.0
     </footer>
   </div>
 
@@ -897,9 +1050,9 @@
           </div>
         </div>
         <div class="form-group" style="flex: 1; margin-bottom: 0;">
-          <label for="rule-order-input">Tab Strip Position</label>
+          <label for="rule-order-input">Group Position</label>
           <input type="number" id="rule-order-input" min="1" value="1" required>
-          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Browser group position (1 = leftmost).</span>
+          <span style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">Where this group appears in the tab bar (1 = leftmost).</span>
         </div>
       </div>
 

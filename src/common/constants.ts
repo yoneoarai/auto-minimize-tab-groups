@@ -9,6 +9,10 @@ export const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
 export const MIN_TIMEOUT_SECONDS = 1;
 export const MAX_TIMEOUT_SECONDS = 3600; // 1 hour
 
+export const DEFAULT_GROUPING_DELAY_MS = 1000; // 1 second settling delay for navigation / redirects
+export const MIN_GROUPING_DELAY_MS = 0; // 0ms = immediate grouping
+export const MAX_GROUPING_DELAY_MS = 10000; // 10 seconds max
+
 export const DEBOUNCE_DELAY_MS = 250; // Event debouncing delay
 export const NEW_TAB_GRACE_PERIOD_MS = 1000; // Grace period for new tabs to settle
 export const JUST_OPENED_GRACE_PERIOD_MS = 5000; // Grace period for manually opened groups
@@ -30,6 +34,8 @@ export const TAB_GROUP_COLORS: readonly TabGroupColor[] = [
   'orange',
 ] as const;
 
+export const DEFAULT_TAB_INSERT_POSITION: 'front' | 'end' = 'end';
+
 export const STORAGE_KEYS = {
   TIMEOUT: 'timeout',
   CONFIG: 'config',
@@ -41,6 +47,7 @@ export const STORAGE_KEYS = {
 export const createDefaultConfig = (): ExtensionConfig => ({
   version: CONFIG_VERSION,
   enabled: true,
+  autoGroupTabs: true,
   defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
   timeoutMs: DEFAULT_TIMEOUT_MS,
   rules: [],
@@ -54,6 +61,9 @@ export const createDefaultConfig = (): ExtensionConfig => ({
     },
   },
   groupOrdering: 'manual',
+  groupingDelayMs: DEFAULT_GROUPING_DELAY_MS,
+  ignoreAuthRedirects: true,
+  tabInsertPosition: DEFAULT_TAB_INSERT_POSITION,
   reorganizeOnRuleChange: true,
   collapsePaused: false,
 });
